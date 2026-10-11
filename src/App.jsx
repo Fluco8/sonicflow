@@ -12,11 +12,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Vues : 'search' | 'liked' | 'playlist'
+  // Tabs: 'search' | 'liked' | 'playlist'
   const [activeTab, setActiveTab] = useState('search');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(null);
 
-  // Playlists et Titres likés (persistés dans localStorage)
   const [likedTracks, setLikedTracks] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('sf_liked_tracks') || '[]');
@@ -29,14 +28,10 @@ export default function App() {
     } catch { return []; }
   });
 
-  // Modal Playlist
   const [modalTrack, setModalTrack] = useState(null);
-
-  // File d'attente
   const queueRef = useRef([]);
   const historyRef = useRef([]);
 
-  // Sauvegardes localStorage
   useEffect(() => {
     localStorage.setItem('sf_liked_tracks', JSON.stringify(likedTracks));
   }, [likedTracks]);
@@ -71,14 +66,12 @@ export default function App() {
     }
     setCurrentTrack(track);
 
-    // Mettre à jour la file d'attente
     const currentIndex = sourceList.findIndex(t => t.id === track.id);
     if (currentIndex !== -1 && currentIndex < sourceList.length - 1) {
       const remaining = sourceList.slice(currentIndex + 1);
       queueRef.current = remaining;
       setNextTrack(remaining[0]);
     } else {
-      // Plus rien dans la liste : chercher des recommandations
       fetchMoreRecommendations(track);
     }
   };
@@ -128,7 +121,6 @@ export default function App() {
     }
   };
 
-  // Gestion des Likes
   const handleToggleLike = (track) => {
     setLikedTracks(prev => {
       const exists = prev.some(t => t.id === track.id);
@@ -140,7 +132,6 @@ export default function App() {
     });
   };
 
-  // Gestion des Playlists
   const handleCreatePlaylist = (name, initialTrack) => {
     const newPl = {
       id: Date.now().toString(),
@@ -162,7 +153,6 @@ export default function App() {
     }));
   };
 
-  // Titres à afficher selon la vue active
   const currentDisplayedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
   const displayedTracks =
     activeTab === 'liked' ? likedTracks :
@@ -170,107 +160,117 @@ export default function App() {
     tracks;
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-b from-neutral-900 via-neutral-950 to-black select-none">
-      {/* Barre de navigation Spotify */}
-      <div className="border-b border-neutral-800/80 px-6 py-4 flex items-center justify-between">
+    <div className="h-full flex flex-col bg-[#050505] text-[#f5f5f7] select-none">
+      {/* Apple Frosted Floating Navigation Bar */}
+      <header className="sticky top-0 z-40 px-6 py-4 border-b border-white/[0.06] apple-glass flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/favicon.svg" alt="SonicFlow" className="w-8 h-8 drop-shadow" />
-          <h1 className="text-xl font-bold tracking-tight text-white">SonicFlow</h1>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-white to-neutral-400 p-[1px] shadow-sm">
+            <div className="w-full h-full bg-black rounded-[11px] flex items-center justify-center">
+              <span className="text-white text-xs font-black">▶</span>
+            </div>
+          </div>
+          <h1 className="text-base font-semibold tracking-tight text-white">SonicFlow</h1>
         </div>
 
-        {/* Onglets Bibliothèque */}
-        <div className="flex items-center gap-2">
+        {/* Apple Segmented Pill Navigation */}
+        <div className="flex items-center gap-1.5 bg-neutral-900/90 p-1 rounded-full border border-white/[0.08] shadow-inner">
           <button
             onClick={() => setActiveTab('search')}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-              activeTab === 'search' ? 'bg-white text-black' : 'bg-neutral-800 text-neutral-300 hover:text-white'
+            className={`px-3.5 py-1 rounded-full text-xs font-medium transition-all apple-press ${
+              activeTab === 'search' 
+                ? 'bg-white text-black shadow-sm font-semibold' 
+                : 'text-neutral-400 hover:text-white'
             }`}
           >
-            🔍 Découvrir
+            Explorer
           </button>
 
           <button
             onClick={() => setActiveTab('liked')}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              activeTab === 'liked' ? 'bg-green-500 text-black' : 'bg-neutral-800 text-neutral-300 hover:text-white'
+            className={`px-3.5 py-1 rounded-full text-xs font-medium transition-all apple-press flex items-center gap-1.5 ${
+              activeTab === 'liked' 
+                ? 'bg-white text-black shadow-sm font-semibold' 
+                : 'text-neutral-400 hover:text-white'
             }`}
           >
-            <span>♥</span> Titres likés ({likedTracks.length})
+            <span className={activeTab === 'liked' ? 'text-red-500' : ''}>♥</span>
+            <span>Favoris ({likedTracks.length})</span>
           </button>
 
-          {/* Menus Playlists */}
-          <div className="flex items-center gap-1">
-            {playlists.map(pl => (
-              <button
-                key={pl.id}
-                onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium max-w-xs truncate transition-all ${
-                  activeTab === 'playlist' && selectedPlaylistId === pl.id
-                    ? 'bg-neutral-200 text-black font-semibold'
-                    : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
-                }`}
-              >
-                {pl.name}
-              </button>
-            ))}
-
+          {playlists.map(pl => (
             <button
-              onClick={() => {
-                const name = prompt('Nom de la nouvelle playlist :');
-                if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
-              }}
-              className="px-2 py-1.5 rounded-full bg-neutral-800/50 hover:bg-neutral-700 text-neutral-400 hover:text-white text-xs font-bold"
-              title="Créer une playlist"
+              key={pl.id}
+              onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
+              className={`px-3 py-1 rounded-full text-xs font-medium max-w-xs truncate transition-all apple-press ${
+                activeTab === 'playlist' && selectedPlaylistId === pl.id
+                  ? 'bg-white text-black shadow-sm font-semibold'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
             >
-              +
+              {pl.name}
             </button>
-          </div>
-        </div>
-      </div>
+          ))}
 
-      {/* Contenu principal */}
-      <div className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-28' : 'pb-8'}`}>
-        <div className="px-6 pt-6">
+          <button
+            onClick={() => {
+              const name = prompt('Nom de la playlist :');
+              if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
+            }}
+            className="w-6 h-6 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center text-xs apple-press transition-colors"
+            title="Créer une playlist"
+          >
+            +
+          </button>
+        </div>
+      </header>
+
+      {/* Main Surface */}
+      <main className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-36' : 'pb-12'}`}>
+        <div className="max-w-4xl mx-auto px-6 pt-8">
           {activeTab === 'search' && (
-            <>
+            <div className="mb-8">
               <SearchBar onSearch={handleSearch} />
 
               {!hasSearched && (
-                <div className="text-center mt-20">
-                  <p className="text-neutral-400 text-lg">Recherche un titre pour commencer la session</p>
-                  <p className="text-neutral-600 text-sm mt-2">Pré-buffering actif : les titres s'enchaînent instantanément</p>
+                <div className="text-center mt-28 max-w-sm mx-auto">
+                  <div className="w-16 h-16 rounded-3xl bg-neutral-900 border border-white/10 mx-auto flex items-center justify-center mb-4 text-2xl shadow-xl">
+                    🎧
+                  </div>
+                  <h2 className="text-lg font-semibold text-white tracking-tight">Votre musique, instantanément</h2>
+                  <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                    Recherchez vos morceaux favoris. Enchaînement et bufferisation continue sans interruption.
+                  </p>
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {activeTab === 'liked' && (
-            <div className="max-w-4xl mx-auto mb-6 flex items-center gap-4">
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-indigo-500 to-green-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            <div className="mb-8 flex items-end gap-5">
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-950 border border-white/10 flex items-center justify-center text-red-500 text-3xl shadow-2xl">
                 ♥
               </div>
               <div>
-                <p className="text-xs uppercase font-bold text-neutral-400">Playlist</p>
-                <h2 className="text-2xl font-bold text-white">Titres likés</h2>
-                <p className="text-xs text-neutral-500 mt-1">{likedTracks.length} titre(s)</p>
+                <p className="text-[11px] uppercase tracking-wider font-bold text-neutral-400">Bibliothèque</p>
+                <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">Titres likés</h2>
+                <p className="text-xs text-neutral-400 mt-1 font-mono">{likedTracks.length} morceau(x)</p>
               </div>
             </div>
           )}
 
           {activeTab === 'playlist' && currentDisplayedPlaylist && (
-            <div className="max-w-4xl mx-auto mb-6 flex items-center gap-4">
-              <div className="w-16 h-16 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            <div className="mb-8 flex items-end gap-5">
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-neutral-800 to-neutral-950 border border-white/10 flex items-center justify-center text-white text-3xl shadow-2xl">
                 🎵
               </div>
               <div>
-                <p className="text-xs uppercase font-bold text-neutral-400">Playlist</p>
-                <h2 className="text-2xl font-bold text-white">{currentDisplayedPlaylist.name}</h2>
-                <p className="text-xs text-neutral-500 mt-1">{currentDisplayedPlaylist.tracks.length} titre(s)</p>
+                <p className="text-[11px] uppercase tracking-wider font-bold text-neutral-400">Playlist</p>
+                <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">{currentDisplayedPlaylist.name}</h2>
+                <p className="text-xs text-neutral-400 mt-1 font-mono">{currentDisplayedPlaylist.tracks.length} morceau(x)</p>
               </div>
             </div>
           )}
 
-          {/* Liste de titres */}
           <TrackList
             tracks={displayedTracks}
             onPlay={(t) => handlePlay(t, displayedTracks)}
@@ -282,16 +282,16 @@ export default function App() {
           />
 
           {displayedTracks.length === 0 && !isLoading && (hasSearched || activeTab !== 'search') && (
-            <p className="text-center text-neutral-500 mt-12">
-              {activeTab === 'liked' ? 'Tu n’as liké aucun titre pour le moment.' :
-               activeTab === 'playlist' ? 'Cette playlist est vide. Ajoute des titres depuis la recherche !' :
-               'Aucun résultat trouvé.'}
+            <p className="text-center text-neutral-500 text-xs mt-16">
+              {activeTab === 'liked' ? 'Aucun titre dans vos favoris.' :
+               activeTab === 'playlist' ? 'Cette playlist ne contient aucun titre pour l’instant.' :
+               'Aucun résultat.'}
             </p>
           )}
         </div>
-      </div>
+      </main>
 
-      {/* Lecteur avec Pré-chargement automatique */}
+      {/* Floating Apple Island Player */}
       <Player
         track={currentTrack}
         nextTrack={nextTrack}
@@ -301,7 +301,7 @@ export default function App() {
         isLiked={currentTrack ? likedTracks.some(t => t.id === currentTrack.id) : false}
       />
 
-      {/* Modale d'ajout à une playlist */}
+      {/* Modal */}
       <PlaylistModal
         isOpen={!!modalTrack}
         onClose={() => setModalTrack(null)}

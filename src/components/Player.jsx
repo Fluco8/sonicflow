@@ -3,7 +3,7 @@ import { getStreamUrl, formatDuration } from '../services/piped';
 
 export default function Player({ track, onNext, onPrevious, nextTrack, onToggleLike, isLiked }) {
   const audioRef = useRef(new Audio());
-  const nextAudioRef = useRef(new Audio()); // Pré-buffering de la piste suivante
+  const nextAudioRef = useRef(new Audio());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -11,19 +11,17 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // 1. Pré-chargement agressif du morceau SUIVANT dès qu'on le connaît !
   useEffect(() => {
     if (nextTrack) {
       getStreamUrl(nextTrack.searchKey || `${nextTrack.title} ${nextTrack.artist}`).then(url => {
         if (url) {
           nextAudioRef.current.src = url;
-          nextAudioRef.current.preload = 'auto'; // Force le navigateur à charger les premières secondes en RAM
+          nextAudioRef.current.preload = 'auto';
         }
       }).catch(() => {});
     }
   }, [nextTrack]);
 
-  // 2. Chargement du morceau actuel
   const loadTrack = useCallback(async (trackData) => {
     const audio = audioRef.current;
     setLoading(true);
@@ -35,7 +33,6 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
     audio.pause();
 
     try {
-      // Si la piste suivante était déjà pré-chargée dans nextAudioRef, on échange immédiatement sans délai !
       if (nextAudioRef.current.src && nextAudioRef.current.src.length > 10 && trackData.id === nextTrack?.id) {
         audio.src = nextAudioRef.current.src;
       } else {
@@ -120,25 +117,28 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
   if (!track) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 px-4 py-3 z-50 shadow-2xl">
-      <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
-        {/* Track info & Like */}
+    <div className="fixed bottom-4 left-4 right-4 max-w-4xl mx-auto z-50">
+      {/* Floating Island / Apple Glass Material */}
+      <div className="apple-glass rounded-3xl p-3.5 shadow-2xl border border-white/10 flex items-center justify-between gap-4">
+        {/* Track info & Artwork Squircle */}
         <div className="flex items-center gap-3 w-1/4 min-w-0">
           {track.thumbnail && (
-            <img src={track.thumbnail} alt="" className="w-12 h-12 rounded shadow object-cover shrink-0" />
+            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow-md border border-white/10">
+              <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
+            </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white truncate">{track.title}</p>
-            <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
+            <p className="text-sm font-semibold text-white truncate tracking-tight">{track.title}</p>
+            <p className="text-xs text-neutral-400 truncate mt-0.5">{track.artist}</p>
           </div>
-          {/* Bouton Like */}
+
           <button
             onClick={() => onToggleLike && onToggleLike(track)}
-            className="text-neutral-400 hover:text-green-500 transition-colors p-1"
-            title={isLiked ? "Retirer des favoris" : "Ajouter aux Titres likés"}
+            className="p-1.5 text-neutral-400 hover:text-red-500 apple-press"
+            title={isLiked ? "Retirer des favoris" : "Liker"}
           >
             <svg
-              className={`w-5 h-5 ${isLiked ? 'text-green-500 fill-green-500' : 'fill-none stroke-current'}`}
+              className={`w-4 h-4 transition-transform ${isLiked ? 'text-red-500 fill-red-500 scale-110' : 'fill-none stroke-current'}`}
               viewBox="0 0 24 24"
               strokeWidth="2"
             >
@@ -147,32 +147,32 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
           </button>
         </div>
 
-        {/* Controls */}
-        <div className="flex-1 flex flex-col items-center gap-1 max-w-xl">
-          <div className="flex items-center gap-4">
+        {/* Center Controls & Scrubber */}
+        <div className="flex-1 flex flex-col items-center gap-1.5 max-w-lg">
+          <div className="flex items-center gap-6">
             {/* Previous */}
             <button
               onClick={onPrevious}
-              className="text-neutral-400 hover:text-white transition-colors"
+              className="text-neutral-400 hover:text-white apple-press transition-colors"
               title="Précédent"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
               </svg>
             </button>
 
-            {/* Play/Pause */}
+            {/* Play/Pause Apple Glass Button */}
             <button
               onClick={togglePlay}
               disabled={loading}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all shadow disabled:opacity-50"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black apple-press shadow-md disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
               ) : isPlaying ? (
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                  <rect x="6" y="5" width="3.5" height="14" rx="1" />
+                  <rect x="14.5" y="5" width="3.5" height="14" rx="1" />
                 </svg>
               ) : (
                 <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
@@ -184,18 +184,18 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
             {/* Next */}
             <button
               onClick={onNext}
-              className="text-neutral-400 hover:text-white transition-colors"
-              title="Suivant (Style similaire)"
+              className="text-neutral-400 hover:text-white apple-press transition-colors"
+              title="Suivant"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
               </svg>
             </button>
           </div>
 
-          {/* Progress bar */}
-          <div className="w-full flex items-center gap-2">
-            <span className="text-xs text-neutral-400 w-10 text-right">
+          {/* Time Scrubber */}
+          <div className="w-full flex items-center gap-2.5">
+            <span className="text-[11px] font-mono text-neutral-400 w-9 text-right tabular-nums">
               {formatDuration(currentTime)}
             </span>
             <input
@@ -205,21 +205,21 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
               step="0.1"
               value={currentTime}
               onChange={handleSeek}
-              className="flex-1 accent-green-500"
+              className="flex-1"
               style={{
                 background: duration
-                  ? `linear-gradient(to right, #1DB954 ${(currentTime / duration) * 100}%, #4d4d4d ${(currentTime / duration) * 100}%)`
-                  : '#4d4d4d'
+                  ? `linear-gradient(to right, #ffffff ${(currentTime / duration) * 100}%, rgba(255,255,255,0.15) ${(currentTime / duration) * 100}%)`
+                  : 'rgba(255,255,255,0.15)'
               }}
             />
-            <span className="text-xs text-neutral-400 w-10">
+            <span className="text-[11px] font-mono text-neutral-400 w-9 tabular-nums">
               {formatDuration(duration)}
             </span>
           </div>
         </div>
 
-        {/* Volume */}
-        <div className="w-1/4 flex items-center justify-end gap-2">
+        {/* Volume Scrubber */}
+        <div className="w-1/4 flex items-center justify-end gap-2.5">
           <svg className="w-4 h-4 text-neutral-400" fill="currentColor" viewBox="0 0 24 24">
             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
           </svg>
@@ -230,16 +230,16 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
             step="0.01"
             value={volume}
             onChange={handleVolume}
-            className="w-24 accent-green-500"
+            className="w-20"
             style={{
-              background: `linear-gradient(to right, #1DB954 ${volume * 100}%, #4d4d4d ${volume * 100}%)`
+              background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`
             }}
           />
         </div>
       </div>
 
       {error && (
-        <p className="text-center text-xs text-red-400 mt-1">{error}</p>
+        <p className="text-center text-xs text-red-400 mt-2 bg-neutral-900/80 backdrop-blur py-1 px-3 rounded-full border border-red-500/20 max-w-xs mx-auto">{error}</p>
       )}
     </div>
   );
