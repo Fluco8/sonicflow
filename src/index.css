@@ -1,9 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@theme {
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 html, body, #root {
@@ -14,25 +13,38 @@ html, body, #root {
 body {
   background: #000;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbar */
+/* Focus clavier visible */
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+input[type='text']:focus-visible {
+  outline: none;
+}
+
+/* Scrollbar discrète façon Spotify */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 12px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #888;
+  background: rgba(255, 255, 255, 0.5);
+  background-clip: padding-box;
 }
 
-/* Smooth range input */
+/* Sliders (volume, progression) */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
@@ -55,4 +67,11 @@ input[type='range']::-webkit-slider-thumb {
 }
 input[type='range']:hover::-webkit-slider-thumb {
   opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
