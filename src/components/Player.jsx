@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getStreamUrl, formatDuration } from '../services/piped';
 
-export default function Player({ track, onNext, onPrevious }) {
+export default function Player({ track, onNext, onPrevious, nextTrack, onToggleLike, isLiked }) {
   const audioRef = useRef(new Audio());
+  const nextAudioRef = useRef(new Audio()); // Pré-buffering de la piste suivante
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -10,6 +11,19 @@ export default function Player({ track, onNext, onPrevious }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // 1. Pré-chargement agressif du morceau SUIVANT dès qu'on le connaît !
+  useEffect(() => {
+    if (nextTrack) {
+      getStreamUrl(nextTrack.searchKey || `${nextTrack.title} ${nextTrack.artist}`).then(url => {
+        if (url) {
+          nextAudioRef.current.src = url;
+          nextAudioRef.current.preload = 'auto'; // Force le navigateur à charger les premières secondes en RAM
+        }
+      }).catch(() => {});
+    }
+  }, [nextTrack]);
+
+  // 2. Chargement du morceau actuel
   const loadTrack = useCallback(async (trackData) => {
     const audio = audioRef.current;
     setLoading(true);
@@ -21,8 +35,14 @@ export default function Player({ track, onNext, onPrevious }) {
     audio.pause();
 
     try {
-      const streamUrl = await getStreamUrl(trackData.searchKey || `${trackData.title} ${trackData.artist}`);
-      audio.src = streamUrl;
+      // Si la piste suivante était déjà pré-chargée dans nextAudioRef, on échange immédiatement sans délai !
+      if (nextAudioRef.current.src && nextAudioRef.current.src.length > 10 && trackData.id === nextTrack?.id) {
+        audio.src = nextAudioRef.current.src;
+      } else {
+        const streamUrl = await getStreamUrl(trackData.searchKey || `${trackData.title} ${trackData.artist}`);
+        audio.src = streamUrl;
+      }
+
       audio.volume = volume;
       await audio.play();
       setIsPlaying(true);
@@ -32,7 +52,7 @@ export default function Player({ track, onNext, onPrevious }) {
     } finally {
       setLoading(false);
     }
-  }, [volume]);
+  }, [volume, nextTrack]);
 
   useEffect(() => {
     if (track) {
@@ -52,12 +72,9 @@ export default function Player({ track, onNext, onPrevious }) {
         setDuration(audio.duration);
       }
     };
-    // Quand le morceau se termine -> enchainer automatiquement le suivant
     const onEnded = () => {
       setIsPlaying(false);
-      if (onNext) {
-        onNext();
-      }
+      if (onNext) onNext();
     };
     const onError = () => {
       if (audio.src) setError('Erreur de lecture');
@@ -105,15 +122,29 @@ export default function Player({ track, onNext, onPrevious }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 px-4 py-3 z-50 shadow-2xl">
       <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
-        {/* Track info */}
+        {/* Track info & Like */}
         <div className="flex items-center gap-3 w-1/4 min-w-0">
           {track.thumbnail && (
             <img src={track.thumbnail} alt="" className="w-12 h-12 rounded shadow object-cover shrink-0" />
           )}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-white truncate">{track.title}</p>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
           </div>
+          {/* Bouton Like */}
+          <button
+            onClick={() => onToggleLike && onToggleLike(track)}
+            className="text-neutral-400 hover:text-green-500 transition-colors p-1"
+            title={isLiked ? "Retirer des favoris" : "Ajouter aux Titres likés"}
+          >
+            <svg
+              className={`w-5 h-5 ${isLiked ? 'text-green-500 fill-green-500' : 'fill-none stroke-current'}`}
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          </button>
         </div>
 
         {/* Controls */}
