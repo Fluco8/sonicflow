@@ -1,10 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-@theme {
-  --font-sans: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-}
-
+{ margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root {
   height: 100%;
   overflow: hidden;
@@ -13,43 +9,31 @@ html, body, #root {
 body {
   background: #000;
   color: #fff;
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Focus clavier visible */
-:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-input[type='text']:focus-visible {
-  outline: none;
-}
-
-/* Scrollbar discrète façon Spotify */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 12px;
+  width: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
+  background: #555;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
-  background-clip: padding-box;
+  background: #888;
 }
 
-/* Sliders (volume, progression) */
+/* Smooth range input */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  background: #4d4d4d;
+  background: 
+#4d4d4d;
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -67,11 +51,4 @@ input[type='range']::-webkit-slider-thumb {
 }
 input[type='range']:hover::-webkit-slider-thumb {
   opacity: 1;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
 }
