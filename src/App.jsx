@@ -36,7 +36,7 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-neutral-900 to-black">
       {/* Main content */}
-      <div className={flex-1 overflow-y-auto ${currentTrack ? 'pb-24' : 'pb-8'}}>
+      <div className={`flex-1 overflow-y-auto ${currentTrack ? 'pb-24' : 'pb-8'}`}>
         <div className="px-6 pt-8">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
