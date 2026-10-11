@@ -8,6 +8,20 @@ export async function searchTracks(query) {
   return data.tracks || [];
 }
 
+export async function getRecommendations(track) {
+  if (!track) return [];
+  const params = new URLSearchParams();
+  if (track.artistId) params.append('artistId', track.artistId);
+  if (track.trackId) params.append('trackId', track.trackId);
+  if (track.artist) params.append('artist', track.artist);
+  if (track.title) params.append('title', track.title);
+
+  const res = await fetch(`${API_BASE}/recommendations?${params.toString()}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.tracks || [];
+}
+
 export async function getStreamUrl(searchKey) {
   const res = await fetch(`${API_BASE}/stream?q=${encodeURIComponent(searchKey)}`);
   if (!res.ok) throw new Error('Streaming extraction failed');

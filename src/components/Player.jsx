@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getStreamUrl, formatDuration } from '../services/piped';
 
-export default function Player({ track }) {
+export default function Player({ track, onNext, onPrevious }) {
   const audioRef = useRef(new Audio());
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -14,18 +14,16 @@ export default function Player({ track }) {
     const audio = audioRef.current;
     setLoading(true);
     setError(null);
+    setIsPlaying(false);
     setCurrentTime(0);
     setDuration(trackData.duration || 0);
 
-    // Prépare l'audio sans attendre pour réduire la latence perçue
     audio.pause();
 
     try {
       const streamUrl = await getStreamUrl(trackData.searchKey || `${trackData.title} ${trackData.artist}`);
       audio.src = streamUrl;
       audio.volume = volume;
-      
-      // Lance la lecture dès que le premier paquet arrive (canplaythrough ou play direct)
       await audio.play();
       setIsPlaying(true);
     } catch (e) {
@@ -54,7 +52,13 @@ export default function Player({ track }) {
         setDuration(audio.duration);
       }
     };
-    const onEnded = () => setIsPlaying(false);
+    // Quand le morceau se termine -> enchainer automatiquement le suivant
+    const onEnded = () => {
+      setIsPlaying(false);
+      if (onNext) {
+        onNext();
+      }
+    };
     const onError = () => {
       if (audio.src) setError('Erreur de lecture');
     };
@@ -70,7 +74,7 @@ export default function Player({ track }) {
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, []);
+  }, [onNext]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -115,6 +119,18 @@ export default function Player({ track }) {
         {/* Controls */}
         <div className="flex-1 flex flex-col items-center gap-1 max-w-xl">
           <div className="flex items-center gap-4">
+            {/* Previous */}
+            <button
+              onClick={onPrevious}
+              className="text-neutral-400 hover:text-white transition-colors"
+              title="Précédent"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+              </svg>
+            </button>
+
+            {/* Play/Pause */}
             <button
               onClick={togglePlay}
               disabled={loading}
@@ -132,6 +148,17 @@ export default function Player({ track }) {
                   <path d="M8 5v14l11-7z" />
                 </svg>
               )}
+            </button>
+
+            {/* Next */}
+            <button
+              onClick={onNext}
+              className="text-neutral-400 hover:text-white transition-colors"
+              title="Suivant (Style similaire)"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+              </svg>
             </button>
           </div>
 
