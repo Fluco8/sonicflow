@@ -117,28 +117,29 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
   if (!track) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 max-w-4xl mx-auto z-50">
-      {/* Floating Island / Apple Glass Material */}
-      <div className="apple-glass rounded-3xl p-3.5 shadow-2xl border border-white/10 flex items-center justify-between gap-4">
-        {/* Track info & Artwork Squircle */}
+    <div className="fixed bottom-3 inset-x-0 z-50 flex flex-col items-center pointer-events-none px-4">
+      {/* Floating Island Player centré en bas */}
+      <div className="pointer-events-auto w-full max-w-4xl bg-[#121212]/95 backdrop-blur-2xl rounded-2xl p-3 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.8)] flex items-center justify-between gap-4">
+        
+        {/* Track info & Artwork à gauche */}
         <div className="flex items-center gap-3 w-1/4 min-w-0">
           {track.thumbnail && (
-            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow-md border border-white/10">
+            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 shadow bg-neutral-800">
               <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-white truncate tracking-tight">{track.title}</p>
-            <p className="text-xs text-neutral-400 truncate mt-0.5">{track.artist}</p>
+            <p className="text-xs font-semibold text-white truncate tracking-tight">{track.title}</p>
+            <p className="text-[11px] text-neutral-400 truncate mt-0.5">{track.artist}</p>
           </div>
 
           <button
             onClick={() => onToggleLike && onToggleLike(track)}
-            className="p-1.5 text-neutral-400 hover:text-red-500 apple-press"
+            className="p-1.5 text-neutral-400 hover:text-white apple-press transition-colors"
             title={isLiked ? "Retirer des favoris" : "Liker"}
           >
             <svg
-              className={`w-4 h-4 transition-transform ${isLiked ? 'text-red-500 fill-red-500 scale-110' : 'fill-none stroke-current'}`}
+              className={`w-4 h-4 transition-transform ${isLiked ? 'text-green-500 fill-green-500 scale-110' : 'fill-none stroke-current'}`}
               viewBox="0 0 24 24"
               strokeWidth="2"
             >
@@ -147,9 +148,9 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
           </button>
         </div>
 
-        {/* Center Controls & Scrubber */}
+        {/* Center Controls & Progress Bar */}
         <div className="flex-1 flex flex-col items-center gap-1.5 max-w-lg">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             {/* Previous */}
             <button
               onClick={onPrevious}
@@ -161,11 +162,11 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
               </svg>
             </button>
 
-            {/* Play/Pause Apple Glass Button */}
+            {/* Play/Pause Button */}
             <button
               onClick={togglePlay}
               disabled={loading}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black apple-press shadow-md disabled:opacity-50"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all shadow disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
@@ -195,7 +196,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
 
           {/* Time Scrubber */}
           <div className="w-full flex items-center gap-2.5">
-            <span className="text-[11px] font-mono text-neutral-400 w-9 text-right tabular-nums">
+            <span className="text-[10px] font-mono text-neutral-400 w-9 text-right tabular-nums">
               {formatDuration(currentTime)}
             </span>
             <input
@@ -205,20 +206,20 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
               step="0.1"
               value={currentTime}
               onChange={handleSeek}
-              className="flex-1"
+              className="flex-1 accent-white"
               style={{
                 background: duration
                   ? `linear-gradient(to right, #ffffff ${(currentTime / duration) * 100}%, rgba(255,255,255,0.15) ${(currentTime / duration) * 100}%)`
                   : 'rgba(255,255,255,0.15)'
               }}
             />
-            <span className="text-[11px] font-mono text-neutral-400 w-9 tabular-nums">
+            <span className="text-[10px] font-mono text-neutral-400 w-9 tabular-nums">
               {formatDuration(duration)}
             </span>
           </div>
         </div>
 
-        {/* Volume Scrubber */}
+        {/* Volume Scrubber à droite */}
         <div className="w-1/4 flex items-center justify-end gap-2.5">
           <svg className="w-4 h-4 text-neutral-400" fill="currentColor" viewBox="0 0 24 24">
             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
@@ -230,7 +231,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
             step="0.01"
             value={volume}
             onChange={handleVolume}
-            className="w-20"
+            className="w-20 accent-white"
             style={{
               background: `linear-gradient(to right, #ffffff ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`
             }}
@@ -239,7 +240,9 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
       </div>
 
       {error && (
-        <p className="text-center text-xs text-red-400 mt-2 bg-neutral-900/80 backdrop-blur py-1 px-3 rounded-full border border-red-500/20 max-w-xs mx-auto">{error}</p>
+        <p className="pointer-events-auto text-center text-xs text-red-400 mt-2 bg-neutral-900/90 py-1 px-3 rounded-full border border-red-500/20 shadow">
+          {error}
+        </p>
       )}
     </div>
   );
