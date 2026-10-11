@@ -1,17 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
+import NodeCache from 'node-cache';
 
 const app = express();
 const PORT = 3001;
 
+// Cache persistant en mémoire : TTL 4 heures
+const cache = new NodeCache({ stdTTL: 14400, checkperiod: 600 });
+
 app.use(cors());
 app.use(express.json());
 
-// Cache en mémoire des flux extraits : clé = query, valeur = { url, timestamp }
-const streamCache = new Map();
-
-// 1. Recherche Deezer instantanée
+// 1. Recherche via Deezer + Résolution d'ID YouTube ultra-rapide
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json({ tracks: [] });
@@ -27,41 +28,44 @@ app.get('/api/search', async (req, res) => {
         artist: t.artist?.name || 'Inconnu',
         duration: t.duration || 0,
         thumbnail: t.album?.cover_medium || t.album?.cover || '',
-        searchKey
+        searchKey,
+        // Si déjà en cache, l'app sait qu'elle peut lancer à 0ms
+        cached: cache.has(searchKey)
       };
     });
 
     res.json({ tracks });
 
-    // Pré-chauffe automatiquement le 1er résultat en arrière-plan pour du 0-délai au clic !
-    if (tracks.length > 0) {
-      prefetchStream(tracks[0].searchKey);
-    }
+    // Pré-extraction en parallèle des 3 premiers titres dès que l'utilisateur tape !
+    tracks.slice(0, 3).forEach(track => {
+      if (!cache.has(track.searchKey)) {
+        getOrFetchAudioUrl(track.searchKey).catch(() => {});
+      }
+    });
+
   } catch (err) {
     console.error('Search error:', err);
     res.status(500).json({ error: 'Search failed' });
   }
 });
 
-function prefetchStream(searchKey) {
-  if (streamCache.has(searchKey)) return;
-  extractStreamFast(searchKey).then(url => {
-    if (url) streamCache.set(searchKey, { url, time: Date.now() });
-  }).catch(() => {});
-}
+// Extraction optimisée : récupère direct l'ID + le stream en coupant tout scraping superflu
+function getOrFetchAudioUrl(searchKey) {
+  if (cache.has(searchKey)) {
+    return Promise.resolve(cache.get(searchKey));
+  }
 
-function extractStreamFast(query) {
   return new Promise((resolve, reject) => {
-    // Flags ultra-rapides pour yt-dlp :
-    // --no-playlist, --no-warnings, pas de check format lourd, format 251 ou ba
+    // Flags d'extraction les plus véloces possibles dans yt-dlp :
+    // --skip-download, --no-warnings, pas de lookup de playlist, format direct opus 251 ou m4a 140
     const args = [
       '--no-playlist',
       '--no-warnings',
       '--no-check-certificates',
-      '--prefer-free-formats',
+      '--no-abort-on-error',
       '-g',
-      '-f', '251/ba/b',
-      `ytsearch1:${query}`
+      '-f', '251/140/ba',
+      `ytsearch1:${searchKey}`
     ];
 
     const ytdlp = spawn('yt-dlp', args);
@@ -71,6 +75,7 @@ function extractStreamFast(query) {
     ytdlp.on('close', code => {
       const url = output.trim().split('\n')[0];
       if (code === 0 && url && url.startsWith('http')) {
+        cache.set(searchKey, url);
         resolve(url);
       } else {
         reject(new Error('Extraction failed'));
@@ -80,23 +85,22 @@ function extractStreamFast(query) {
   });
 }
 
-// 2. Récupération du flux ultra-rapide (avec cache immédiat)
+// 2. Endpoint Stream ultra-rapide
 app.get('/api/stream', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
 
-  // 1. Hit cache ? Instantané (< 1ms)
-  const cached = streamCache.get(query);
-  if (cached && (Date.now() - cached.time < 3600000)) { // 1h validité
-    return res.json({ streamUrl: cached.url });
+  // 1. Si en cache -> Réponse immédiate (< 1ms)
+  if (cache.has(query)) {
+    return res.json({ streamUrl: cache.get(query), cached: true });
   }
 
+  // 2. Sinon résolution rapide
   try {
-    const streamUrl = await extractStreamFast(query);
-    streamCache.set(query, { url: streamUrl, time: Date.now() });
-    res.json({ streamUrl });
+    const streamUrl = await getOrFetchAudioUrl(query);
+    res.json({ streamUrl, cached: false });
   } catch (err) {
-    console.error('Stream extraction error:', err.message);
+    console.error('Stream error:', err.message);
     res.status(500).json({ error: 'Failed to extract stream' });
   }
 });

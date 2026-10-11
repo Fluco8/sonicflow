@@ -14,14 +14,18 @@ export default function Player({ track }) {
     const audio = audioRef.current;
     setLoading(true);
     setError(null);
-    setIsPlaying(false);
     setCurrentTime(0);
     setDuration(trackData.duration || 0);
+
+    // Prépare l'audio sans attendre pour réduire la latence perçue
+    audio.pause();
 
     try {
       const streamUrl = await getStreamUrl(trackData.searchKey || `${trackData.title} ${trackData.artist}`);
       audio.src = streamUrl;
       audio.volume = volume;
+      
+      // Lance la lecture dès que le premier paquet arrive (canplaythrough ou play direct)
       await audio.play();
       setIsPlaying(true);
     } catch (e) {
@@ -52,7 +56,7 @@ export default function Player({ track }) {
     };
     const onEnded = () => setIsPlaying(false);
     const onError = () => {
-      if (audio.src) setError('Erreur de lecture audio');
+      if (audio.src) setError('Erreur de lecture');
     };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -95,15 +99,15 @@ export default function Player({ track }) {
   if (!track) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 px-4 py-3 z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 px-4 py-3 z-50 shadow-2xl">
       <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
         {/* Track info */}
         <div className="flex items-center gap-3 w-1/4 min-w-0">
           {track.thumbnail && (
-            <img src={track.thumbnail} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+            <img src={track.thumbnail} alt="" className="w-12 h-12 rounded shadow object-cover shrink-0" />
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{track.title}</p>
+            <p className="text-sm font-semibold text-white truncate">{track.title}</p>
             <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
           </div>
         </div>
@@ -114,7 +118,7 @@ export default function Player({ track }) {
             <button
               onClick={togglePlay}
               disabled={loading}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 transition-transform disabled:opacity-50"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all shadow disabled:opacity-50"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
@@ -143,7 +147,7 @@ export default function Player({ track }) {
               step="0.1"
               value={currentTime}
               onChange={handleSeek}
-              className="flex-1"
+              className="flex-1 accent-green-500"
               style={{
                 background: duration
                   ? `linear-gradient(to right, #1DB954 ${(currentTime / duration) * 100}%, #4d4d4d ${(currentTime / duration) * 100}%)`
@@ -168,7 +172,7 @@ export default function Player({ track }) {
             step="0.01"
             value={volume}
             onChange={handleVolume}
-            className="w-24"
+            className="w-24 accent-green-500"
             style={{
               background: `linear-gradient(to right, #1DB954 ${volume * 100}%, #4d4d4d ${volume * 100}%)`
             }}
