@@ -9,7 +9,6 @@ export default function Player({ track }) {
   const [volume, setVolume] = useState(0.7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [streamInfo, setStreamInfo] = useState(null);
 
   const loadTrack = useCallback(async (trackData) => {
     const audio = audioRef.current;
@@ -17,18 +16,17 @@ export default function Player({ track }) {
     setError(null);
     setIsPlaying(false);
     setCurrentTime(0);
-    setDuration(0);
-    
+    setDuration(trackData.duration || 0);
+
     try {
-      const info = await getStreamUrl(trackData.id);
-      setStreamInfo(info);
-      audio.src = info.url;
+      const streamUrl = await getStreamUrl(trackData.searchKey || `${trackData.title} ${trackData.artist}`);
+      audio.src = streamUrl;
       audio.volume = volume;
       await audio.play();
       setIsPlaying(true);
     } catch (e) {
       console.error('Failed to load track:', e);
-      setError('Impossible de lire ce titre. Essaie un autre.');
+      setError('Impossible de lire ce titre.');
     } finally {
       setLoading(false);
     }
@@ -45,11 +43,17 @@ export default function Player({ track }) {
 
   useEffect(() => {
     const audio = audioRef.current;
-    
+
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const onDurationChange = () => setDuration(audio.duration || 0);
+    const onDurationChange = () => {
+      if (audio.duration && !isNaN(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
     const onEnded = () => setIsPlaying(false);
-    const onError = () => setError('Erreur de lecture');
+    const onError = () => {
+      if (audio.src) setError('Erreur de lecture audio');
+    };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('durationchange', onDurationChange);
@@ -90,39 +94,30 @@ export default function Player({ track }) {
 
   if (!track) return null;
 
-  const displayTitle = streamInfo?.title || track.title;
-  const displayArtist = streamInfo?.artist || track.artist;
-  const displayThumb = streamInfo?.thumbnail || track.thumbnail;
-
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800
-                    px-4 py-3 z-50">
-      <div className="max-w-screen-xl mx-auto flex items-center gap-4">
+    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 px-4 py-3 z-50">
+      <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
         {/* Track info */}
         <div className="flex items-center gap-3 w-1/4 min-w-0">
-          {displayThumb && (
-            <img src={displayThumb} alt="" 
-                 className="w-12 h-12 rounded object-cover shrink-0" />
+          {track.thumbnail && (
+            <img src={track.thumbnail} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{displayTitle}</p>
-            <p className="text-xs text-neutral-400 truncate">{displayArtist}</p>
+            <p className="text-sm font-medium text-white truncate">{track.title}</p>
+            <p className="text-xs text-neutral-400 truncate">{track.artist}</p>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="flex-1 flex flex-col items-center gap-1">
+        <div className="flex-1 flex flex-col items-center gap-1 max-w-xl">
           <div className="flex items-center gap-4">
             <button
               onClick={togglePlay}
               disabled={loading}
-              className="w-8 h-8 flex items-center justify-center rounded-full
-                        bg-white text-black hover:scale-105 transition-transform
-                        disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-black hover:scale-105 transition-transform disabled:opacity-50"
             >
               {loading ? (
-                <div className="w-4 h-4 border-2 border-black border-t-transparent
-                               rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
               ) : isPlaying ? (
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <rect x="6" y="4" width="4" height="16" rx="1" />
@@ -137,7 +132,7 @@ export default function Player({ track }) {
           </div>
 
           {/* Progress bar */}
-          <div className="w-full max-w-lg flex items-center gap-2">
+          <div className="w-full flex items-center gap-2">
             <span className="text-xs text-neutral-400 w-10 text-right">
               {formatDuration(currentTime)}
             </span>
@@ -181,7 +176,6 @@ export default function Player({ track }) {
         </div>
       </div>
 
-      {/* Error message */}
       {error && (
         <p className="text-center text-xs text-red-400 mt-1">{error}</p>
       )}
