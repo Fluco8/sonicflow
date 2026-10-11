@@ -6,7 +6,7 @@ import NodeCache from 'node-cache';
 const app = express();
 const PORT = 3001;
 
-// Cache persistant en mémoire : TTL 4 heures
+// Cache en mémoire (4h)
 const cache = new NodeCache({ stdTTL: 14400, checkperiod: 600 });
 
 app.use(cors());
@@ -36,7 +36,7 @@ app.get('/api/search', async (req, res) => {
 
     res.json({ tracks });
 
-    // Pré-extraction des 3 premiers titres
+    // Pré-extraction en parallèle des 3 premiers titres
     tracks.slice(0, 3).forEach(track => {
       if (!cache.has(track.searchKey)) {
         getOrFetchAudioUrl(track.searchKey).catch(() => {});
@@ -49,14 +49,13 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// 2. Recommandations de titres similaires (Radio / Style similaire)
+// 2. Recommandations
 app.get('/api/recommendations', async (req, res) => {
   const { artistId, trackId, artist, title } = req.query;
 
   try {
     let similarTracks = [];
 
-    // Essai 1 : Piste radio par artiste via Deezer
     if (artistId) {
       const r = await fetch(`https://api.deezer.com/artist/${artistId}/top?limit=10`);
       const data = await r.json();
@@ -65,7 +64,6 @@ app.get('/api/recommendations', async (req, res) => {
       }
     }
 
-    // Essai 2 : Si pas assez de morceaux, chercher des morceaux du même artiste ou genre
     if (similarTracks.length < 5 && artist) {
       const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(artist)}&limit=10`);
       const data = await r.json();
@@ -88,7 +86,6 @@ app.get('/api/recommendations', async (req, res) => {
 
     res.json({ tracks: mapped });
 
-    // Pré-chargement automatique du 1er morceau recommandé
     if (mapped.length > 0 && !cache.has(mapped[0].searchKey)) {
       getOrFetchAudioUrl(mapped[0].searchKey).catch(() => {});
     }
@@ -98,21 +95,24 @@ app.get('/api/recommendations', async (req, res) => {
   }
 });
 
-// Extraction optimisée via yt-dlp
+// Extraction tout-terrain avec contournement de la restriction d'âge
 function getOrFetchAudioUrl(searchKey) {
   if (cache.has(searchKey)) {
     return Promise.resolve(cache.get(searchKey));
   }
 
   return new Promise((resolve, reject) => {
+    // On scanne jusqu'à 5 résultats et on filtre toute vidéo restreinte par l'âge
+    // Ainsi, si le clip officiel a une restriction d'âge, yt-dlp prend l'audio officiel/album immédiatement !
     const args = [
       '--no-playlist',
       '--no-warnings',
       '--no-check-certificates',
       '--no-abort-on-error',
+      '--match-filter', '!is_age_limit',
       '-g',
-      '-f', '251/140/ba',
-      `ytsearch1:${searchKey}`
+      '-f', '251/140/ba/b',
+      `ytsearch5:${searchKey}`
     ];
 
     const ytdlp = spawn('yt-dlp', args);
@@ -120,10 +120,12 @@ function getOrFetchAudioUrl(searchKey) {
 
     ytdlp.stdout.on('data', d => { output += d.toString(); });
     ytdlp.on('close', code => {
-      const url = output.trim().split('\n')[0];
-      if (code === 0 && url && url.startsWith('http')) {
-        cache.set(searchKey, url);
-        resolve(url);
+      // Récupère la 1ère URL valide retournée parmi les résultats non bloqués
+      const lines = output.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
+      if (lines.length > 0) {
+        const bestUrl = lines[0];
+        cache.set(searchKey, bestUrl);
+        resolve(bestUrl);
       } else {
         reject(new Error('Extraction failed'));
       }
