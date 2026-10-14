@@ -259,14 +259,24 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
   if (!track) return null;
 
   return (
-    <div className="fixed bottom-3 inset-x-0 z-50 flex flex-col items-center pointer-events-none px-4">
+    <div className="fixed bottom-[4.5rem] md:bottom-3 inset-x-0 z-50 flex flex-col items-center pointer-events-none px-2 sm:px-4">
       {/* Floating Island Player centré en bas */}
-      <div className="pointer-events-auto w-full max-w-4xl bg-[#121212]/95 backdrop-blur-2xl rounded-2xl p-3 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.8)] flex items-center justify-between gap-4">
+      <div className="relative pointer-events-auto w-full max-w-4xl bg-[#121212]/95 backdrop-blur-2xl rounded-xl md:rounded-2xl p-2 md:p-3 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.8)] flex items-center justify-between gap-2 md:gap-4 overflow-hidden">
         
+        {/* Barre de progression discrète sur mobile */}
+        {duration > 0 && (
+          <div className="md:hidden absolute bottom-0 inset-x-0 h-[2px] bg-white/10">
+            <div 
+              className="h-full bg-white transition-all duration-150" 
+              style={{ width: `${Math.min(100, (currentTime / duration) * 100)}%` }} 
+            />
+          </div>
+        )}
+
         {/* Track info & Artwork à gauche */}
-        <div className="flex items-center gap-3 w-1/4 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 md:w-1/4 min-w-0">
           {track.thumbnail && (
-            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 shadow bg-neutral-800">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden shrink-0 shadow bg-neutral-800">
               <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
             </div>
           )}
@@ -277,7 +287,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
 
           <button
             onClick={() => onToggleLike && onToggleLike(track)}
-            className="p-1.5 text-neutral-400 hover:text-white apple-press transition-colors"
+            className="p-1.5 text-neutral-400 hover:text-white apple-press transition-colors shrink-0"
             title={isLiked ? "Retirer des favoris" : "Liker"}
           >
             <svg
@@ -291,12 +301,12 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
         </div>
 
         {/* Center Controls & Progress Bar */}
-        <div className="flex-1 flex flex-col items-center gap-1.5 max-w-lg">
-          <div className="flex items-center gap-5">
+        <div className="shrink-0 md:flex-1 flex flex-col items-center gap-1.5 md:max-w-lg">
+          <div className="flex items-center gap-3 sm:gap-5">
             {/* Previous */}
             <button
               onClick={onPrevious}
-              className="text-neutral-400 hover:text-white apple-press transition-colors"
+              className="text-neutral-400 hover:text-white apple-press transition-colors hidden sm:block"
               title="Précédent"
             >
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -336,8 +346,8 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
             </button>
           </div>
 
-          {/* Time Scrubber */}
-          <div className="w-full flex items-center gap-2.5">
+          {/* Time Scrubber (desktop/tablette) */}
+          <div className="hidden md:flex w-full items-center gap-2.5">
             <span className="text-[10px] font-mono text-neutral-400 w-9 text-right tabular-nums">
               {formatDuration(currentTime)}
             </span>
@@ -361,8 +371,8 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
           </div>
         </div>
 
-        {/* Volume Scrubber précis avec courbe logarithmique & Mute toggle */}
-        <div className="w-1/4 flex items-center justify-end gap-2.5">
+        {/* Volume Scrubber précis avec courbe logarithmique & Mute toggle (desktop) */}
+        <div className="hidden md:flex w-1/4 items-center justify-end gap-2.5">
           <button
             onClick={toggleMute}
             className="text-neutral-400 hover:text-white transition-colors apple-press"
