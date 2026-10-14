@@ -20,11 +20,18 @@ export default function App() {
   // Daily Mixes
   const [dailyMixes, setDailyMixes] = useState([]);
 
-  // Modal d'importation Spotify / Deezer
+  // Modales in-page (au lieu de prompts/confirms natifs du navigateur)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
+
+  // Modale création de playlist in-page
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+
+  // Modale confirmation de suppression in-page
+  const [playlistToDelete, setPlaylistToDelete] = useState(null);
 
   // Menu contextuel clic droit sur playlist
   const [contextMenu, setContextMenu] = useState(null); // { x, y, playlistId }
@@ -69,7 +76,6 @@ export default function App() {
     localStorage.setItem('sf_sidebar_width', sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  // Fermer le menu contextuel lors d'un clic ailleurs
   useEffect(() => {
     const closeMenu = () => setContextMenu(null);
     window.addEventListener('click', closeMenu);
@@ -197,23 +203,32 @@ export default function App() {
     });
   };
 
-  const handleCreatePlaylist = (name, initialTrack) => {
+  // Création playlist in-page
+  const submitCreatePlaylist = (e) => {
+    e.preventDefault();
+    if (!newPlaylistName.trim()) return;
+
     const newPl = {
       id: Date.now().toString(),
-      name,
-      tracks: initialTrack ? [initialTrack] : []
+      name: newPlaylistName.trim(),
+      tracks: []
     };
     setPlaylists(prev => [...prev, newPl]);
+    setSelectedPlaylistId(newPl.id);
+    setActiveTab('playlist');
+    setNewPlaylistName('');
+    setIsCreateModalOpen(false);
   };
 
-  const handleDeletePlaylist = (playlistId) => {
-    if (confirm('Voulez-vous vraiment supprimer cette playlist ?')) {
-      setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-      if (selectedPlaylistId === playlistId) {
-        setActiveTab('home');
-        setSelectedPlaylistId(null);
-      }
+  // Confirmation suppression playlist in-page
+  const confirmDeletePlaylist = () => {
+    if (!playlistToDelete) return;
+    setPlaylists(prev => prev.filter(p => p.id !== playlistToDelete.id));
+    if (selectedPlaylistId === playlistToDelete.id) {
+      setActiveTab('home');
+      setSelectedPlaylistId(null);
     }
+    setPlaylistToDelete(null);
   };
 
   const handleAddToPlaylist = (playlistId, track) => {
@@ -228,13 +243,13 @@ export default function App() {
     }));
   };
 
-  const handleContextMenu = (e, playlistId) => {
+  const handleContextMenu = (e, pl) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
-      playlistId
+      playlist: pl
     });
   };
 
@@ -323,11 +338,9 @@ export default function App() {
             <span>Importer</span>
           </button>
 
+          {/* Ouvre la belle modale in-page au lieu du prompt natif */}
           <button
-            onClick={() => {
-              const name = prompt('Nom de la playlist :');
-              if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
-            }}
+            onClick={() => setIsCreateModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-white transition-all apple-press border border-white/[0.06]"
           >
             <span>+</span>
@@ -405,10 +418,7 @@ export default function App() {
                 📥
               </button>
               <button
-                onClick={() => {
-                  const name = prompt('Nom de la playlist :');
-                  if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
-                }}
+                onClick={() => setIsCreateModalOpen(true)}
                 className="text-neutral-400 hover:text-white text-lg hover:scale-110 p-1"
                 title="Nouvelle playlist"
               >
@@ -427,7 +437,7 @@ export default function App() {
                 return (
                   <div
                     key={pl.id}
-                    onContextMenu={(e) => handleContextMenu(e, pl.id)}
+                    onContextMenu={(e) => handleContextMenu(e, pl)}
                     onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group cursor-pointer ${
                       isActive
@@ -443,9 +453,9 @@ export default function App() {
                       <p className="text-xs text-neutral-400 truncate mt-0.5">{pl.tracks?.length || 0} titre(s)</p>
                     </div>
 
-                    {/* Bouton croix rapide au survol */}
+                    {/* Bouton croix rapide qui ouvre la modale in-page */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id); }}
+                      onClick={(e) => { e.stopPropagation(); setPlaylistToDelete(pl); }}
                       className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-400 text-xs rounded transition-opacity"
                       title="Supprimer la playlist"
                     >
@@ -560,9 +570,9 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Bouton Supprimer la playlist */}
+              {/* Bouton Supprimer la playlist qui ouvre la modale in-page */}
               <button
-                onClick={() => handleDeletePlaylist(currentDisplayedPlaylist.id)}
+                onClick={() => setPlaylistToDelete(currentDisplayedPlaylist)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 text-xs font-semibold transition-all apple-press"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
@@ -609,9 +619,92 @@ export default function App() {
         onClose={() => setModalTrack(null)}
         track={modalTrack}
         playlists={playlists}
-        onCreatePlaylist={handleCreatePlaylist}
+        onCreatePlaylist={(name, track) => {
+          const newPl = { id: Date.now().toString(), name, tracks: track ? [track] : [] };
+          setPlaylists(prev => [...prev, newPl]);
+        }}
         onSelectPlaylist={handleAddToPlaylist}
       />
+
+      {/* MODALE CRÉATION PLAYLIST IN-PAGE (Remplace le prompt navigateur) */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="apple-glass rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-base font-semibold text-white tracking-tight">Nouvelle Playlist</h2>
+              <button 
+                onClick={() => { setIsCreateModalOpen(false); setNewPlaylistName(''); }} 
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-neutral-300 flex items-center justify-center text-xs apple-press transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={submitCreatePlaylist} className="space-y-4">
+              <input
+                type="text"
+                required
+                autoFocus
+                placeholder="Donnez un nom à votre playlist..."
+                value={newPlaylistName}
+                onChange={(e) => setNewPlaylistName(e.target.value)}
+                className="w-full bg-white/[0.06] px-4 py-2.5 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-white/40 border border-white/[0.04]"
+              />
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setIsCreateModalOpen(false); setNewPlaylistName(''); }}
+                  className="px-4 py-2 rounded-xl text-xs text-neutral-400 hover:text-white transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="bg-white text-black font-semibold text-xs px-5 py-2 rounded-xl apple-press transition-all shadow"
+                >
+                  Créer la playlist
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE CONFIRMATION SUPPRESSION IN-PAGE (Remplace le confirm navigateur) */}
+      {playlistToDelete && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="apple-glass rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto mb-3 border border-red-500/20">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+
+            <h3 className="text-center text-base font-semibold text-white tracking-tight mb-1">Supprimer la playlist ?</h3>
+            <p className="text-center text-xs text-neutral-400 mb-5 leading-relaxed">
+              Êtes-vous sûr de vouloir supprimer <span className="text-white font-medium">« {playlistToDelete.name} »</span> ? Cette action est irréversible.
+            </p>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPlaylistToDelete(null)}
+                className="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-neutral-200 font-semibold transition-all apple-press"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePlaylist}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold transition-all apple-press shadow-lg shadow-red-500/20"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODALE D'IMPORTATION */}
       {isImportModalOpen && (
@@ -676,7 +769,7 @@ export default function App() {
         >
           <button
             onClick={() => {
-              handleDeletePlaylist(contextMenu.playlistId);
+              setPlaylistToDelete(contextMenu.playlist);
               setContextMenu(null);
             }}
             className="w-full text-left px-3.5 py-2 text-xs text-red-400 hover:bg-white/10 hover:text-red-300 flex items-center gap-2 transition-colors font-medium"
