@@ -3,7 +3,7 @@ import SearchBar from './components/SearchBar';
 import TrackList from './components/TrackList';
 import Player from './components/Player';
 import PlaylistModal from './components/PlaylistModal';
-import { searchTracks, getRecommendations, getDailyMixes } from './services/piped';
+import { searchTracks, getRecommendations, getDailyMixes, importPlaylist } from './services/piped';
 
 export default function App() {
   const [tracks, setTracks] = useState([]);
@@ -20,7 +20,13 @@ export default function App() {
   // Daily Mixes
   const [dailyMixes, setDailyMixes] = useState([]);
 
-  // Largeur dynamique ajustable de la barre latérale (avec persistance)
+  // Modal d'importation Spotify / Deezer
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState(null);
+
+  // Largeur dynamique ajustable de la barre latérale
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const saved = localStorage.getItem('sf_sidebar_width');
@@ -60,14 +66,12 @@ export default function App() {
     localStorage.setItem('sf_sidebar_width', sidebarWidth.toString());
   }, [sidebarWidth]);
 
-  // Chargement des Daily Mixes
   useEffect(() => {
     getDailyMixes().then(mixes => {
       if (mixes && mixes.length > 0) setDailyMixes(mixes);
     }).catch(() => {});
   }, []);
 
-  // Gestionnaire de redimensionnement de la sidebar (Drag & Drop de gauche à droite)
   const startResizing = (e) => {
     isResizingRef.current = true;
     document.body.style.cursor = 'col-resize';
@@ -204,6 +208,34 @@ export default function App() {
     }));
   };
 
+  // Traitement de l'importation de playlist externe (Spotify / Deezer)
+  const handleImportSubmit = async (e) => {
+    e.preventDefault();
+    if (!importUrl.trim()) return;
+
+    setIsImporting(true);
+    setImportError(null);
+
+    try {
+      const data = await importPlaylist(importUrl.trim());
+      const newPlaylist = {
+        id: Date.now().toString(),
+        name: data.name || 'Playlist importée',
+        tracks: data.tracks || []
+      };
+
+      setPlaylists(prev => [newPlaylist, ...prev]);
+      setSelectedPlaylistId(newPlaylist.id);
+      setActiveTab('playlist');
+      setIsImportModalOpen(false);
+      setImportUrl('');
+    } catch (err) {
+      setImportError(err.message || 'Impossible d’importer cette playlist');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const currentDisplayedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
   const displayedTracks =
     activeTab === 'liked' ? likedTracks :
@@ -214,7 +246,7 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex flex-col bg-black text-[#f5f5f7] select-none overflow-hidden font-sans">
       
-      {/* 1. Top Header Spotify avec recherche centrée épurée */}
+      {/* 1. Header supérieur */}
       <header className="h-16 shrink-0 px-6 bg-black flex items-center justify-between gap-4 border-b border-white/[0.05] z-30">
         <div className="flex items-center gap-4 w-72 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -232,7 +264,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Centre : Bouton Accueil + Barre de Recherche */}
+        {/* Centre : Bouton Accueil + Barre de Recherche sans cube */}
         <div className="flex-1 max-w-xl flex items-center gap-2.5 justify-center">
           <button
             onClick={() => { setActiveTab('home'); setHasSearched(false); }}
@@ -251,35 +283,43 @@ export default function App() {
           </div>
         </div>
 
-        {/* Profil & Actions droite */}
-        <div className="flex items-center gap-3 w-72 justify-end shrink-0">
+        {/* Boutons Créer & Importer droite */}
+        <div className="flex items-center gap-2.5 w-72 justify-end shrink-0">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-neutral-300 hover:text-white transition-all apple-press border border-white/[0.06]"
+            title="Importer une playlist Spotify ou Deezer"
+          >
+            <span>📥</span>
+            <span>Importer</span>
+          </button>
+
           <button
             onClick={() => {
               const name = prompt('Nom de la playlist :');
               if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-white transition-all apple-press border border-white/[0.06]"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-white transition-all apple-press border border-white/[0.06]"
           >
             <span>+</span>
             <span>Playlist</span>
           </button>
+          
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow">
             A
           </div>
         </div>
       </header>
 
-      {/* 2. Corps de page : Barre latérale redimensionnable + Contenu principal */}
+      {/* 2. Corps de page : Barre latérale + Contenu */}
       <div className="flex-1 flex overflow-hidden p-2 gap-0 relative">
         
-        {/* BARRE LATÉRALE REDIMENSIONNABLE (DYNAMIC RESIZABLE SIDEBAR) */}
+        {/* BARRE LATÉRALE */}
         <aside
           style={{ width: `${sidebarWidth}px` }}
           className="shrink-0 bg-[#121212] rounded-xl flex flex-col overflow-hidden border border-white/[0.04] p-3.5 shadow-sm select-none"
         >
-          {/* Navigation haute */}
           <div className="space-y-1 mb-4 pb-3 border-b border-white/[0.06]">
-            {/* Accueil */}
             <button
               onClick={() => { setActiveTab('home'); setHasSearched(false); }}
               className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
@@ -294,7 +334,6 @@ export default function App() {
               <span className="text-[13px]">Accueil</span>
             </button>
 
-            {/* Onglet Mix par style */}
             <button
               onClick={() => { setActiveTab('mixes'); setSelectedMix(dailyMixes[0] || null); }}
               className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
@@ -310,7 +349,6 @@ export default function App() {
               <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/10 text-neutral-300">Style</span>
             </button>
 
-            {/* Titres likés */}
             <button
               onClick={() => setActiveTab('liked')}
               className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
@@ -327,22 +365,29 @@ export default function App() {
             </button>
           </div>
 
-          {/* Section Playlists */}
           <div className="flex items-center justify-between px-3 py-1.5 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Vos Playlists</span>
-            <button
-              onClick={() => {
-                const name = prompt('Nom de la playlist :');
-                if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
-              }}
-              className="text-neutral-400 hover:text-white text-lg hover:scale-110 transition-transform p-1"
-              title="Nouvelle playlist"
-            >
-              +
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="text-neutral-400 hover:text-white text-xs hover:scale-105 p-1"
+                title="Importer depuis Spotify ou Deezer"
+              >
+                📥
+              </button>
+              <button
+                onClick={() => {
+                  const name = prompt('Nom de la playlist :');
+                  if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
+                }}
+                className="text-neutral-400 hover:text-white text-lg hover:scale-110 p-1"
+                title="Nouvelle playlist"
+              >
+                +
+              </button>
+            </div>
           </div>
 
-          {/* Liste des playlists avec plus gros logos */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {playlists.length === 0 ? (
               <p className="text-xs text-neutral-500 px-3 py-6 text-center">Aucune playlist créée.</p>
@@ -359,7 +404,6 @@ export default function App() {
                         : 'text-neutral-300 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
-                    {/* Logo musique agrandi et plus net */}
                     <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-neutral-800 to-neutral-700 flex items-center justify-center text-base text-neutral-200 shrink-0 shadow-md group-hover:scale-105 transition-transform border border-white/5">
                       🎵
                     </div>
@@ -374,19 +418,18 @@ export default function App() {
           </div>
         </aside>
 
-        {/* SEPARATEUR REDIMENSIONNABLE (COL-RESIZE HANDLE) */}
+        {/* POIGNÉE REDIMENSIONNABLE */}
         <div
           onMouseDown={startResizing}
           className="w-2.5 hover:w-2.5 cursor-col-resize flex items-center justify-center group relative z-20 transition-colors"
-          title="Glisser pour redimensionner la barre"
+          title="Glisser pour redimensionner"
         >
           <div className="w-[3px] h-8 rounded-full bg-neutral-700/60 group-hover:bg-white/80 transition-colors" />
         </div>
 
-        {/* ZONE DE CONTENU PRINCIPALE (CENTRE) */}
+        {/* CONTENU PRINCIPAL */}
         <main className={`flex-1 bg-[#121212] rounded-xl overflow-y-auto border border-white/[0.04] p-6 relative ${currentTrack ? 'pb-32' : 'pb-10'}`}>
           
-          {/* VUE ACCUEIL */}
           {activeTab === 'home' && !hasSearched && (
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Bonjour</h2>
@@ -424,15 +467,13 @@ export default function App() {
             </div>
           )}
 
-          {/* VUE MIXES (STYLES MUSICAUX QUI VONT ENSEMBLE) */}
           {activeTab === 'mixes' && (
             <div className="mb-8">
               <div className="mb-6">
                 <h2 className="text-3xl font-bold text-white tracking-tight">Vos Daily Mixes</h2>
-                <p className="text-xs text-neutral-400 mt-1">Musiques du même univers réunies automatiquement sans fausse note.</p>
+                <p className="text-xs text-neutral-400 mt-1">Musiques du même univers réunies automatiquement.</p>
               </div>
 
-              {/* Sélecteur horizontal de Mixes */}
               <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 scrollbar-none">
                 {dailyMixes.map(mix => (
                   <button
@@ -452,7 +493,6 @@ export default function App() {
             </div>
           )}
 
-          {/* En-tête Favoris */}
           {activeTab === 'liked' && (
             <div className="mb-8 flex items-end gap-5">
               <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-indigo-700 to-purple-500 flex items-center justify-center text-white text-4xl shadow-xl">
@@ -466,7 +506,6 @@ export default function App() {
             </div>
           )}
 
-          {/* En-tête Playlist sélectionnée */}
           {activeTab === 'playlist' && currentDisplayedPlaylist && (
             <div className="mb-8 flex items-end gap-5">
               <div className="w-24 h-24 rounded-xl bg-[#242424] flex items-center justify-center text-white text-4xl shadow-xl border border-white/5">
@@ -480,7 +519,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Liste des pistes */}
           <TrackList
             tracks={displayedTracks}
             onPlay={(t) => handlePlay(t, displayedTracks)}
@@ -520,6 +558,60 @@ export default function App() {
         onCreatePlaylist={handleCreatePlaylist}
         onSelectPlaylist={handleAddToPlaylist}
       />
+
+      {/* MODALE D'IMPORTATION DE PLAYLIST SPOTIFY / DEEZER */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="apple-glass rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-base font-semibold text-white tracking-tight">Importer une Playlist</h2>
+              <button 
+                onClick={() => { setIsImportModalOpen(false); setImportError(null); }} 
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-neutral-300 flex items-center justify-center text-xs apple-press transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
+              Collez le lien de partage d'une playlist publique <span className="text-white font-medium">Spotify</span> ou <span className="text-white font-medium">Deezer</span>. Tous les morceaux seront automatiquement extraits et jouables.
+            </p>
+
+            <form onSubmit={handleImportSubmit} className="space-y-3">
+              <input
+                type="url"
+                required
+                placeholder="https://open.spotify.com/playlist/... ou https://deezer.com/playlist/..."
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                className="w-full bg-white/[0.06] px-4 py-2.5 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-white/40 border border-white/[0.04]"
+              />
+
+              {importError && (
+                <p className="text-xs text-red-400 bg-red-500/10 p-2.5 rounded-xl border border-red-500/20">{importError}</p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsImportModalOpen(false); setImportError(null); }}
+                  className="px-4 py-2 rounded-xl text-xs text-neutral-400 hover:text-white transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isImporting}
+                  className="bg-white text-black font-semibold text-xs px-5 py-2 rounded-xl apple-press transition-all shadow disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isImporting && <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />}
+                  <span>{isImporting ? 'Importation...' : 'Importer la playlist'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

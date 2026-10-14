@@ -29,6 +29,17 @@ export async function getDailyMixes() {
   return data.mixes || [];
 }
 
+export async function importPlaylist(url) {
+  const res = await fetch(`${API_BASE}/import-playlist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erreur lors de l’importation');
+  return data;
+}
+
 export async function getStreamUrl(searchKey) {
   const res = await fetch(`${API_BASE}/stream?q=${encodeURIComponent(searchKey)}`);
   if (!res.ok) throw new Error('Streaming extraction failed');

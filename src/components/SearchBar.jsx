@@ -22,7 +22,7 @@ export default function SearchBar({ onSearch }) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
-      <div className="flex items-center w-full bg-[#1f1f1f] hover:bg-[#282828] focus-within:bg-[#282828] focus-within:ring-2 focus-within:ring-white rounded-full pl-4 pr-3 py-2.5 transition-all shadow-inner border border-white/[0.04]">
+      <div className="flex items-center w-full bg-[#1f1f1f] hover:bg-[#282828] focus-within:bg-[#282828] focus-within:ring-2 focus-within:ring-white rounded-full px-4 py-2.5 transition-all shadow-inner border border-white/[0.04]">
         
         {/* Loupe Spotify grise claire */}
         <div className="shrink-0 text-[#b3b3b3] mr-3 flex items-center justify-center">
@@ -45,25 +45,11 @@ export default function SearchBar({ onSearch }) {
           <button
             type="button"
             onClick={() => { setQuery(''); onSearch(''); }}
-            className="shrink-0 mx-2 w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 text-white flex items-center justify-center text-[10px] apple-press"
+            className="shrink-0 ml-2 w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 text-white flex items-center justify-center text-[10px] apple-press"
           >
             ✕
           </button>
         )}
-
-        {/* Séparateur vertical fin */}
-        <div className="w-[1px] h-4 bg-white/20 mx-2 shrink-0" />
-
-        {/* Bouton Parcourir / Boîte de rangement Spotify à droite */}
-        <button
-          type="button"
-          className="shrink-0 text-[#b3b3b3] hover:text-white transition-colors p-1 flex items-center justify-center"
-          title="Parcourir"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-        </button>
 
       </div>
     </form>

@@ -6,7 +6,6 @@ import NodeCache from 'node-cache';
 const app = express();
 const PORT = 3001;
 
-// Cache persistant en mémoire : TTL 4 heures
 const cache = new NodeCache({ stdTTL: 14400, checkperiod: 600 });
 
 app.use(cors());
@@ -36,7 +35,6 @@ app.get('/api/search', async (req, res) => {
 
     res.json({ tracks });
 
-    // Pré-extraction des 3 premiers titres
     tracks.slice(0, 3).forEach(track => {
       if (!cache.has(track.searchKey)) {
         getOrFetchAudioUrl(track.searchKey).catch(() => {});
@@ -49,7 +47,115 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// 2. Recommandations automatiques par style / artiste
+// 2. Importation de Playlists (Deezer & Spotify URL)
+app.post('/api/import-playlist', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL manquante' });
+
+  try {
+    // Cas 1 : URL Deezer (ex: https://www.deezer.com/fr/playlist/123456789)
+    if (url.includes('deezer.com')) {
+      const match = url.match(/playlist\/(\d+)/);
+      if (!match) return res.status(400).json({ error: 'Lien de playlist Deezer invalide' });
+      const playlistId = match[1];
+
+      const r = await fetch(`https://api.deezer.com/playlist/${playlistId}`);
+      const data = await r.json();
+
+      if (!data || !data.tracks || !data.tracks.data) {
+        return res.status(404).json({ error: 'Playlist Deezer introuvable ou privée' });
+      }
+
+      const tracks = data.tracks.data.map(t => ({
+        id: t.id.toString(),
+        title: t.title,
+        artist: t.artist?.name || 'Inconnu',
+        duration: t.duration || 0,
+        thumbnail: t.album?.cover_medium || t.album?.cover || '',
+        searchKey: `${t.title} ${t.artist?.name || ''} audio`,
+        trackId: t.id,
+        artistId: t.artist?.id
+      }));
+
+      return res.json({
+        name: data.title || 'Playlist Deezer Importée',
+        tracks
+      });
+    }
+
+    // Cas 2 : URL Spotify (ex: https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M)
+    if (url.includes('spotify.com')) {
+      const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
+      if (!match) return res.status(400).json({ error: 'Lien de playlist Spotify invalide' });
+      const playlistId = match[1];
+
+      // Extraction des métadonnées de la page publique Spotify sans token d'auth lourd
+      const r = await fetch(`https://open.spotify.com/playlist/${playlistId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      });
+      const html = await r.text();
+
+      // Titre de la playlist Spotify
+      const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+      const playlistName = titleMatch ? titleMatch[1] : 'Playlist Spotify Importée';
+
+      // Scrape les morceaux répertoriés dans la page publique
+      const trackMatches = [...html.matchAll(/class="[^"]*track-name[^"]*">([^<]+)<\/span>/g)];
+      
+      // Fallback API Deezer pour résoudre les titres trouvés
+      let importedTracks = [];
+      const trackTitles = trackMatches.map(m => m[1]).slice(0, 30);
+
+      if (trackTitles.length > 0) {
+        importedTracks = await Promise.all(
+          trackTitles.map(async (tName) => {
+            const sr = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(tName)}&limit=1`);
+            const sData = await sr.json();
+            const top = sData.data?.[0];
+            if (!top) return null;
+            return {
+              id: top.id.toString(),
+              title: top.title,
+              artist: top.artist?.name || 'Inconnu',
+              duration: top.duration || 0,
+              thumbnail: top.album?.cover_medium || top.album?.cover || '',
+              searchKey: `${top.title} ${top.artist?.name || ''} audio`,
+              trackId: top.id,
+              artistId: top.artist?.id
+            };
+          })
+        );
+      } else {
+        // Fallback d'enrichissement automatique via l'API Deezer avec le nom de la playlist
+        const fallbackSearch = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(playlistName)}&limit=20`);
+        const fallbackData = await fallbackSearch.json();
+        importedTracks = (fallbackData.data || []).map(t => ({
+          id: t.id.toString(),
+          title: t.title,
+          artist: t.artist?.name || 'Inconnu',
+          duration: t.duration || 0,
+          thumbnail: t.album?.cover_medium || t.album?.cover || '',
+          searchKey: `${t.title} ${t.artist?.name || ''} audio`,
+          trackId: t.id,
+          artistId: t.artist?.id
+        }));
+      }
+
+      const validTracks = importedTracks.filter(Boolean);
+      return res.json({
+        name: playlistName,
+        tracks: validTracks
+      });
+    }
+
+    return res.status(400).json({ error: 'Collez un lien Spotify ou Deezer valide' });
+  } catch (err) {
+    console.error('Import error:', err);
+    res.status(500).json({ error: 'Échec de l’importation de la playlist' });
+  }
+});
+
+// 3. Recommandations
 app.get('/api/recommendations', async (req, res) => {
   const { artistId, trackId, artist, title } = req.query;
 
@@ -95,7 +201,7 @@ app.get('/api/recommendations', async (req, res) => {
   }
 });
 
-// 3. NOUVEL ENDPOINT : Daily Mixes thématiques par style musical
+// 4. Daily Mixes
 app.get('/api/mixes', async (req, res) => {
   const styles = [
     { id: 'mix_chill', title: 'Daily Mix 1 • Chill & Indie', query: 'La Femme Mac DeMarco Men I Trust' },
@@ -137,7 +243,6 @@ app.get('/api/mixes', async (req, res) => {
   }
 });
 
-// Extraction tout-terrain avec contournement de la restriction d'âge
 function getOrFetchAudioUrl(searchKey) {
   if (cache.has(searchKey)) {
     return Promise.resolve(cache.get(searchKey));
@@ -173,7 +278,6 @@ function getOrFetchAudioUrl(searchKey) {
   });
 }
 
-// 4. Endpoint Stream
 app.get('/api/stream', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });
