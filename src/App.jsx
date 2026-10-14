@@ -364,28 +364,31 @@ export default function App() {
           </div>
         </div>
 
-        {/* Boutons Créer & Importer droite - Harmonisés et parfaitement centrés */}
-        <div className="flex items-center gap-2.5 w-72 justify-end shrink-0">
+        {/* Boutons Créer & Importer droite - Style Capsule Spotify */}
+        <div className="flex items-center gap-2 w-72 justify-end shrink-0">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm"
+            title="Créer une nouvelle playlist"
+          >
+            <svg className="w-3.5 h-3.5 text-white stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Playlist</span>
+          </button>
+
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center justify-center gap-2 h-9 px-4 rounded-full bg-[#1c1c1e] hover:bg-[#2c2c2e] text-xs font-semibold text-neutral-200 hover:text-white transition-all apple-press border border-white/[0.08] shadow-sm"
+            className="flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm"
             title="Importer une playlist Spotify ou Deezer"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+            <svg className="w-3.5 h-3.5 text-white stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
             <span>Importer</span>
           </button>
-
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center justify-center gap-2 h-9 px-4 rounded-full bg-white hover:bg-neutral-200 text-xs font-bold text-black transition-all apple-press shadow-sm"
-          >
-            <span className="text-sm font-black leading-none">+</span>
-            <span>Playlist</span>
-          </button>
           
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-md ml-1">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-md ml-1 select-none">
             A
           </div>
         </div>
