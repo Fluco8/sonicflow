@@ -3,7 +3,7 @@ import SearchBar from './components/SearchBar';
 import TrackList from './components/TrackList';
 import Player from './components/Player';
 import PlaylistModal from './components/PlaylistModal';
-import { searchTracks, getRecommendations } from './services/piped';
+import { searchTracks, getRecommendations, getDailyMixes } from './services/piped';
 
 export default function App() {
   const [tracks, setTracks] = useState([]);
@@ -12,9 +12,25 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Vues : 'home' | 'liked' | 'playlist'
+  // Vues : 'home' | 'mixes' | 'liked' | 'playlist'
   const [activeTab, setActiveTab] = useState('home');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(null);
+  const [selectedMix, setSelectedMix] = useState(null);
+
+  // Daily Mixes
+  const [dailyMixes, setDailyMixes] = useState([]);
+
+  // Largeur dynamique ajustable de la barre latérale (avec persistance)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sf_sidebar_width');
+      return saved ? parseInt(saved, 10) : 280;
+    } catch {
+      return 280;
+    }
+  });
+
+  const isResizingRef = useRef(false);
 
   const [likedTracks, setLikedTracks] = useState(() => {
     try {
@@ -39,6 +55,41 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('sf_playlists', JSON.stringify(playlists));
   }, [playlists]);
+
+  useEffect(() => {
+    localStorage.setItem('sf_sidebar_width', sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  // Chargement des Daily Mixes
+  useEffect(() => {
+    getDailyMixes().then(mixes => {
+      if (mixes && mixes.length > 0) setDailyMixes(mixes);
+    }).catch(() => {});
+  }, []);
+
+  // Gestionnaire de redimensionnement de la sidebar (Drag & Drop de gauche à droite)
+  const startResizing = (e) => {
+    isResizingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (moveEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = Math.min(Math.max(200, moveEvent.clientX), 500);
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const handleSearch = async (query) => {
     if (!query.trim()) {
@@ -157,15 +208,15 @@ export default function App() {
   const displayedTracks =
     activeTab === 'liked' ? likedTracks :
     activeTab === 'playlist' ? (currentDisplayedPlaylist?.tracks || []) :
+    activeTab === 'mixes' && selectedMix ? selectedMix.tracks :
     tracks;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-black text-[#f5f5f7] select-none overflow-hidden font-sans">
       
-      {/* 1. Header supérieur Spotify/Apple avec recherche épurée */}
+      {/* 1. Top Header Spotify avec recherche centrée épurée */}
       <header className="h-16 shrink-0 px-6 bg-black flex items-center justify-between gap-4 border-b border-white/[0.05] z-30">
-        {/* Logo / Nav arrows */}
-        <div className="flex items-center gap-4 w-64 shrink-0">
+        <div className="flex items-center gap-4 w-72 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-white to-neutral-400 p-[1px] shadow">
               <div className="w-full h-full bg-black rounded-full flex items-center justify-center">
@@ -181,7 +232,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Centre : Bouton Accueil + Barre de Recherche ultra-clean */}
+        {/* Centre : Bouton Accueil + Barre de Recherche */}
         <div className="flex-1 max-w-xl flex items-center gap-2.5 justify-center">
           <button
             onClick={() => { setActiveTab('home'); setHasSearched(false); }}
@@ -201,13 +252,13 @@ export default function App() {
         </div>
 
         {/* Profil & Actions droite */}
-        <div className="flex items-center gap-3 w-64 justify-end shrink-0">
+        <div className="flex items-center gap-3 w-72 justify-end shrink-0">
           <button
             onClick={() => {
               const name = prompt('Nom de la playlist :');
               if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-white transition-all apple-press border border-white/[0.06]"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#1f1f1f] hover:bg-[#282828] text-xs font-semibold text-white transition-all apple-press border border-white/[0.06]"
           >
             <span>+</span>
             <span>Playlist</span>
@@ -218,63 +269,83 @@ export default function App() {
         </div>
       </header>
 
-      {/* 2. Corps de page : Barre latérale gauche + Contenu principal */}
-      <div className="flex-1 flex overflow-hidden p-2 gap-2">
+      {/* 2. Corps de page : Barre latérale redimensionnable + Contenu principal */}
+      <div className="flex-1 flex overflow-hidden p-2 gap-0 relative">
         
-        {/* BARRE LATÉRALE GAUCHE (Spotify Library Clean) */}
-        <aside className="w-64 shrink-0 bg-[#121212] rounded-xl flex flex-col overflow-hidden border border-white/[0.04] p-3 shadow-sm">
-          
+        {/* BARRE LATÉRALE REDIMENSIONNABLE (DYNAMIC RESIZABLE SIDEBAR) */}
+        <aside
+          style={{ width: `${sidebarWidth}px` }}
+          className="shrink-0 bg-[#121212] rounded-xl flex flex-col overflow-hidden border border-white/[0.04] p-3.5 shadow-sm select-none"
+        >
           {/* Navigation haute */}
           <div className="space-y-1 mb-4 pb-3 border-b border-white/[0.06]">
+            {/* Accueil */}
             <button
               onClick={() => { setActiveTab('home'); setHasSearched(false); }}
-              className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === 'home' && !hasSearched
                   ? 'bg-white/10 text-white'
                   : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
               </svg>
-              <span>Accueil</span>
+              <span className="text-[13px]">Accueil</span>
             </button>
 
+            {/* Onglet Mix par style */}
+            <button
+              onClick={() => { setActiveTab('mixes'); setSelectedMix(dailyMixes[0] || null); }}
+              className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'mixes'
+                  ? 'bg-white/10 text-white'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-500 to-rose-500 flex items-center justify-center text-white text-xs font-bold shadow">
+                ⚡
+              </div>
+              <span className="text-[13px] flex-1 text-left">Daily Mixes</span>
+              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/10 text-neutral-300">Style</span>
+            </button>
+
+            {/* Titres likés */}
             <button
               onClick={() => setActiveTab('liked')}
-              className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`w-full flex items-center gap-3.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                 activeTab === 'liked'
                   ? 'bg-white/10 text-white'
                   : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
-              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-purple-400 flex items-center justify-center text-white text-[10px] shadow">
+              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-400 flex items-center justify-center text-white text-xs shadow">
                 ♥
               </div>
-              <span className="flex-1 text-left">Titres likés</span>
-              <span className="text-[10px] font-mono text-neutral-500">{likedTracks.length}</span>
+              <span className="text-[13px] flex-1 text-left">Titres likés</span>
+              <span className="text-xs font-mono text-neutral-400 font-medium">{likedTracks.length}</span>
             </button>
           </div>
 
           {/* Section Playlists */}
-          <div className="flex items-center justify-between px-3 py-1 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Vos Playlists</span>
+          <div className="flex items-center justify-between px-3 py-1.5 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Vos Playlists</span>
             <button
               onClick={() => {
                 const name = prompt('Nom de la playlist :');
                 if (name && name.trim()) handleCreatePlaylist(name.trim(), null);
               }}
-              className="text-neutral-400 hover:text-white text-base hover:scale-110 transition-transform"
+              className="text-neutral-400 hover:text-white text-lg hover:scale-110 transition-transform p-1"
               title="Nouvelle playlist"
             >
               +
             </button>
           </div>
 
-          {/* Liste déroulante des playlists */}
-          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+          {/* Liste des playlists avec plus gros logos */}
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {playlists.length === 0 ? (
-              <p className="text-xs text-neutral-500 px-3 py-4 text-center">Aucune playlist créée.</p>
+              <p className="text-xs text-neutral-500 px-3 py-6 text-center">Aucune playlist créée.</p>
             ) : (
               playlists.map(pl => {
                 const isActive = activeTab === 'playlist' && selectedPlaylistId === pl.id;
@@ -282,18 +353,19 @@ export default function App() {
                   <button
                     key={pl.id}
                     onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all text-left group ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group ${
                       isActive
                         ? 'bg-white/10 text-white font-semibold'
-                        : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
+                        : 'text-neutral-300 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
-                    <div className="w-7 h-7 rounded-md bg-neutral-800 flex items-center justify-center text-xs text-neutral-300 shrink-0 group-hover:bg-neutral-700">
+                    {/* Logo musique agrandi et plus net */}
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-neutral-800 to-neutral-700 flex items-center justify-center text-base text-neutral-200 shrink-0 shadow-md group-hover:scale-105 transition-transform border border-white/5">
                       🎵
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{pl.name}</p>
-                      <p className="text-[10px] text-neutral-500 truncate">{pl.tracks?.length || 0} titre(s)</p>
+                      <p className="truncate text-sm font-semibold text-white tracking-tight">{pl.name}</p>
+                      <p className="text-xs text-neutral-400 truncate mt-0.5">{pl.tracks?.length || 0} titre(s)</p>
                     </div>
                   </button>
                 );
@@ -302,44 +374,79 @@ export default function App() {
           </div>
         </aside>
 
+        {/* SEPARATEUR REDIMENSIONNABLE (COL-RESIZE HANDLE) */}
+        <div
+          onMouseDown={startResizing}
+          className="w-2.5 hover:w-2.5 cursor-col-resize flex items-center justify-center group relative z-20 transition-colors"
+          title="Glisser pour redimensionner la barre"
+        >
+          <div className="w-[3px] h-8 rounded-full bg-neutral-700/60 group-hover:bg-white/80 transition-colors" />
+        </div>
+
         {/* ZONE DE CONTENU PRINCIPALE (CENTRE) */}
         <main className={`flex-1 bg-[#121212] rounded-xl overflow-y-auto border border-white/[0.04] p-6 relative ${currentTrack ? 'pb-32' : 'pb-10'}`}>
           
-          {/* En-tête de la vue Accueil (Quick Access) */}
+          {/* VUE ACCUEIL */}
           {activeTab === 'home' && !hasSearched && (
             <div className="mb-8">
-              <h2 className="text-xl font-bold text-white mb-4 tracking-tight">Bonjour</h2>
+              <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Bonjour</h2>
               
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                {/* Carte Favoris */}
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3.5">
                 <div
                   onClick={() => setActiveTab('liked')}
-                  className="bg-[#242424] hover:bg-[#2c2c2c] rounded-md flex items-center gap-3 overflow-hidden cursor-pointer group transition-all border border-white/[0.02]"
+                  className="bg-[#242424] hover:bg-[#2c2c2c] rounded-md flex items-center gap-3.5 overflow-hidden cursor-pointer group transition-all border border-white/[0.02]"
                 >
-                  <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-purple-400 flex items-center justify-center text-white text-lg shrink-0 shadow">
+                  <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-400 flex items-center justify-center text-white text-xl shrink-0 shadow">
                     ♥
                   </div>
                   <div className="flex-1 min-w-0 pr-3">
-                    <p className="text-xs font-bold text-white truncate">Titres likés</p>
-                    <p className="text-[10px] text-neutral-400">{likedTracks.length} titres</p>
+                    <p className="text-sm font-bold text-white truncate">Titres likés</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">{likedTracks.length} titres</p>
                   </div>
                 </div>
 
-                {/* Raccourcis playlists */}
                 {playlists.slice(0, 5).map(pl => (
                   <div
                     key={pl.id}
                     onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
-                    className="bg-[#242424] hover:bg-[#2c2c2c] rounded-md flex items-center gap-3 overflow-hidden cursor-pointer group transition-all border border-white/[0.02]"
+                    className="bg-[#242424] hover:bg-[#2c2c2c] rounded-md flex items-center gap-3.5 overflow-hidden cursor-pointer group transition-all border border-white/[0.02]"
                   >
-                    <div className="w-14 h-14 bg-neutral-800 flex items-center justify-center text-white shrink-0 text-lg shadow">
+                    <div className="w-16 h-16 bg-neutral-800 flex items-center justify-center text-white shrink-0 text-xl shadow">
                       🎵
                     </div>
                     <div className="flex-1 min-w-0 pr-3">
-                      <p className="text-xs font-bold text-white truncate">{pl.name}</p>
-                      <p className="text-[10px] text-neutral-400">{pl.tracks?.length || 0} titres</p>
+                      <p className="text-sm font-bold text-white truncate">{pl.name}</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">{pl.tracks?.length || 0} titres</p>
                     </div>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* VUE MIXES (STYLES MUSICAUX QUI VONT ENSEMBLE) */}
+          {activeTab === 'mixes' && (
+            <div className="mb-8">
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-white tracking-tight">Vos Daily Mixes</h2>
+                <p className="text-xs text-neutral-400 mt-1">Musiques du même univers réunies automatiquement sans fausse note.</p>
+              </div>
+
+              {/* Sélecteur horizontal de Mixes */}
+              <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 scrollbar-none">
+                {dailyMixes.map(mix => (
+                  <button
+                    key={mix.id}
+                    onClick={() => setSelectedMix(mix)}
+                    className={`px-4 py-2.5 rounded-2xl text-xs font-semibold shrink-0 transition-all apple-press flex items-center gap-2 border ${
+                      selectedMix?.id === mix.id
+                        ? 'bg-white text-black border-white shadow-lg'
+                        : 'bg-[#1e1e1e] text-neutral-300 border-white/[0.06] hover:bg-[#282828] hover:text-white'
+                    }`}
+                  >
+                    <span>⚡</span>
+                    <span>{mix.title}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -348,11 +455,11 @@ export default function App() {
           {/* En-tête Favoris */}
           {activeTab === 'liked' && (
             <div className="mb-8 flex items-end gap-5">
-              <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-indigo-700 to-purple-500 flex items-center justify-center text-white text-4xl shadow-xl">
+              <div className="w-24 h-24 rounded-xl bg-gradient-to-br from-indigo-700 to-purple-500 flex items-center justify-center text-white text-4xl shadow-xl">
                 ♥
               </div>
               <div>
-                <p className="text-[11px] uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
+                <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
                 <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">Titres likés</h2>
                 <p className="text-xs text-neutral-400 mt-1 font-mono">{likedTracks.length} titre(s)</p>
               </div>
@@ -362,18 +469,18 @@ export default function App() {
           {/* En-tête Playlist sélectionnée */}
           {activeTab === 'playlist' && currentDisplayedPlaylist && (
             <div className="mb-8 flex items-end gap-5">
-              <div className="w-24 h-24 rounded-lg bg-[#242424] flex items-center justify-center text-white text-4xl shadow-xl border border-white/5">
+              <div className="w-24 h-24 rounded-xl bg-[#242424] flex items-center justify-center text-white text-4xl shadow-xl border border-white/5">
                 🎵
               </div>
               <div>
-                <p className="text-[11px] uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
+                <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
                 <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">{currentDisplayedPlaylist.name}</h2>
                 <p className="text-xs text-neutral-400 mt-1 font-mono">{currentDisplayedPlaylist.tracks.length} titre(s)</p>
               </div>
             </div>
           )}
 
-          {/* Liste des titres */}
+          {/* Liste des pistes */}
           <TrackList
             tracks={displayedTracks}
             onPlay={(t) => handlePlay(t, displayedTracks)}

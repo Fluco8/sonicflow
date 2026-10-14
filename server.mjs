@@ -6,7 +6,7 @@ import NodeCache from 'node-cache';
 const app = express();
 const PORT = 3001;
 
-// Cache en mémoire (4h)
+// Cache persistant en mémoire : TTL 4 heures
 const cache = new NodeCache({ stdTTL: 14400, checkperiod: 600 });
 
 app.use(cors());
@@ -36,7 +36,7 @@ app.get('/api/search', async (req, res) => {
 
     res.json({ tracks });
 
-    // Pré-extraction en parallèle des 3 premiers titres
+    // Pré-extraction des 3 premiers titres
     tracks.slice(0, 3).forEach(track => {
       if (!cache.has(track.searchKey)) {
         getOrFetchAudioUrl(track.searchKey).catch(() => {});
@@ -49,7 +49,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// 2. Recommandations
+// 2. Recommandations automatiques par style / artiste
 app.get('/api/recommendations', async (req, res) => {
   const { artistId, trackId, artist, title } = req.query;
 
@@ -95,6 +95,48 @@ app.get('/api/recommendations', async (req, res) => {
   }
 });
 
+// 3. NOUVEL ENDPOINT : Daily Mixes thématiques par style musical
+app.get('/api/mixes', async (req, res) => {
+  const styles = [
+    { id: 'mix_chill', title: 'Daily Mix 1 • Chill & Indie', query: 'La Femme Mac DeMarco Men I Trust' },
+    { id: 'mix_hiphop', title: 'Daily Mix 2 • Rap & Trap', query: 'Drake Travis Scott Kendrick Lamar' },
+    { id: 'mix_electro', title: 'Daily Mix 3 • Electro & Synthwave', query: 'Daft Punk Kavinsky Justice' },
+    { id: 'mix_pop', title: 'Daily Mix 4 • Pop Hits', query: 'The Weeknd Dua Lipa Harry Styles' },
+    { id: 'mix_french', title: 'Daily Mix 5 • Scène Française', query: 'PNL Damso Lomepal Orelsan' }
+  ];
+
+  try {
+    const mixesWithTracks = await Promise.all(
+      styles.map(async (mix) => {
+        const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(mix.query)}&limit=12`);
+        const data = await r.json();
+        const tracks = (data.data || []).map(t => ({
+          id: t.id.toString(),
+          title: t.title,
+          artist: t.artist?.name || 'Inconnu',
+          duration: t.duration || 0,
+          thumbnail: t.album?.cover_medium || t.album?.cover || '',
+          searchKey: `${t.title} ${t.artist?.name || ''} audio`,
+          trackId: t.id,
+          artistId: t.artist?.id
+        }));
+
+        return {
+          id: mix.id,
+          title: mix.title,
+          cover: tracks[0]?.thumbnail || '',
+          tracks
+        };
+      })
+    );
+
+    res.json({ mixes: mixesWithTracks });
+  } catch (err) {
+    console.error('Mix error:', err);
+    res.status(500).json({ mixes: [] });
+  }
+});
+
 // Extraction tout-terrain avec contournement de la restriction d'âge
 function getOrFetchAudioUrl(searchKey) {
   if (cache.has(searchKey)) {
@@ -102,8 +144,6 @@ function getOrFetchAudioUrl(searchKey) {
   }
 
   return new Promise((resolve, reject) => {
-    // On scanne jusqu'à 5 résultats et on filtre toute vidéo restreinte par l'âge
-    // Ainsi, si le clip officiel a une restriction d'âge, yt-dlp prend l'audio officiel/album immédiatement !
     const args = [
       '--no-playlist',
       '--no-warnings',
@@ -120,7 +160,6 @@ function getOrFetchAudioUrl(searchKey) {
 
     ytdlp.stdout.on('data', d => { output += d.toString(); });
     ytdlp.on('close', code => {
-      // Récupère la 1ère URL valide retournée parmi les résultats non bloqués
       const lines = output.trim().split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
       if (lines.length > 0) {
         const bestUrl = lines[0];
@@ -134,7 +173,7 @@ function getOrFetchAudioUrl(searchKey) {
   });
 }
 
-// 3. Endpoint Stream
+// 4. Endpoint Stream
 app.get('/api/stream', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.status(400).json({ error: 'Missing query' });

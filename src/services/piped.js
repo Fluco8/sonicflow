@@ -22,6 +22,13 @@ export async function getRecommendations(track) {
   return data.tracks || [];
 }
 
+export async function getDailyMixes() {
+  const res = await fetch(`${API_BASE}/mixes`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.mixes || [];
+}
+
 export async function getStreamUrl(searchKey) {
   const res = await fetch(`${API_BASE}/stream?q=${encodeURIComponent(searchKey)}`);
   if (!res.ok) throw new Error('Streaming extraction failed');
