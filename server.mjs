@@ -150,7 +150,64 @@ app.post('/api/import-playlist', async (req, res) => {
       });
     }
 
-    return res.status(400).json({ error: 'Collez un lien Spotify ou Deezer valide' });
+    // Cas 3 : URL Apple Music (music.apple.com)
+    if (url.includes('music.apple.com')) {
+      const appleRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      const html = await appleRes.text();
+      const shoebox = html.match(/id="serialized-server-data"[^>]*>([\s\S]+?)<\/script>/);
+
+      if (!shoebox) {
+        return res.status(500).json({ error: 'Impossible de lire les données Apple Music' });
+      }
+
+      const raw = JSON.parse(shoebox[1]);
+      const itemsList = Array.isArray(raw) ? raw : raw.data || [];
+      const payload = itemsList[0]?.data;
+      const sections = payload?.sections || [];
+
+      // Récupérer le header (titre et cover)
+      const headerSec = sections.find(s => s.id?.includes('header') || s.itemKind?.includes('Header'));
+      const headerItem = headerSec?.items?.[0] || {};
+      const playlistName = headerItem.title || 'Playlist Apple Music';
+      const playlistCover = headerItem.artwork?.dictionary?.url
+        ? headerItem.artwork.dictionary.url.replace('{w}', '600').replace('{h}', '600').replace('{f}', 'jpg')
+        : '';
+
+      // Récupérer la liste des pistes
+      const trackSec = sections.find(s => s.items && s.items.length > 1 && (s.itemKind === 'trackLockup' || s.itemKind === 'song'));
+      const rawTracks = trackSec?.items || [];
+
+      const tracks = rawTracks.map((t, idx) => {
+        const title = (t.title || '').trim();
+        const artist = (t.artistName || t.subtitleLinks?.[0]?.title || 'Artiste inconnu').trim();
+        const duration = Math.round((t.duration || 180000) / 1000);
+        let thumbnail = playlistCover;
+        if (t.artwork?.dictionary?.url) {
+          thumbnail = t.artwork.dictionary.url.replace('{w}', '300').replace('{h}', '300').replace('{f}', 'jpg');
+        }
+
+        return {
+          id: `am_${Date.now()}_${idx}`,
+          title,
+          artist,
+          duration,
+          thumbnail,
+          searchKey: `${title} ${artist} audio`
+        };
+      });
+
+      return res.json({
+        name: playlistName,
+        cover: playlistCover || tracks[0]?.thumbnail || '',
+        tracks
+      });
+    }
+
+    return res.status(400).json({ error: 'Collez un lien Spotify, Apple Music ou Deezer valide' });
   } catch (err) {
     console.error('Import error:', err);
     res.status(500).json({ error: 'Échec de l’importation de la playlist' });

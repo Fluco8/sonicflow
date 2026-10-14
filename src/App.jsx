@@ -364,31 +364,31 @@ export default function App() {
           </div>
         </div>
 
-        {/* Boutons Créer & Importer droite - Style Capsule Spotify */}
-        <div className="flex items-center gap-2 w-72 justify-end shrink-0">
+        {/* Boutons Créer & Importer droite - Style Capsule Spotify sans débordement */}
+        <div className="flex items-center gap-2 justify-end shrink-0">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm"
+            className="inline-flex items-center justify-center gap-2 h-8 px-4.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm whitespace-nowrap shrink-0"
             title="Créer une nouvelle playlist"
           >
-            <svg className="w-3.5 h-3.5 text-white stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-white stroke-[2.5] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            <span>Playlist</span>
+            <span className="leading-none">Playlist</span>
           </button>
 
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 h-8 px-3.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm"
-            title="Importer une playlist Spotify ou Deezer"
+            className="inline-flex items-center justify-center gap-2 h-8 px-4.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] active:scale-95 text-white text-xs font-bold transition-all apple-press shadow-sm whitespace-nowrap shrink-0"
+            title="Importer une playlist Spotify, Apple Music ou Deezer"
           >
-            <svg className="w-3.5 h-3.5 text-white stroke-[2.2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-white stroke-[2.2] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span>Importer</span>
+            <span className="leading-none">Importer</span>
           </button>
           
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-md ml-1 select-none">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shadow-md ml-1 select-none shrink-0">
             A
           </div>
         </div>
@@ -439,7 +439,7 @@ export default function App() {
                       className="w-full text-left px-3.5 py-2.5 text-xs text-neutral-200 hover:bg-white/10 hover:text-white flex items-center gap-2.5 transition-colors font-medium"
                     >
                       <span className="text-sm">📥</span>
-                      <span>Importer Spotify / Deezer</span>
+                      <span>Importer Spotify / Apple / Deezer</span>
                     </button>
                   </div>
                 )}
@@ -454,23 +454,6 @@ export default function App() {
                 ⤢
               </button>
             </div>
-          </div>
-
-          {/* 2. Filtres Pilules : Playlists, Podcasts, Albums */}
-          <div className="flex items-center gap-1.5 px-2 pb-2.5 overflow-x-auto scrollbar-none">
-            {['Playlists', 'Podcasts', 'Albums'].map(filter => (
-              <button
-                key={filter}
-                onClick={() => setSidebarFilter(filter)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all apple-press ${
-                  sidebarFilter === filter
-                    ? 'bg-neutral-800 text-white border border-white/10 shadow-sm'
-                    : 'bg-neutral-900/60 text-neutral-400 hover:text-white hover:bg-neutral-800/60 border border-transparent'
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
           </div>
 
           {/* 3. Ligne Recherche & Récents */}
@@ -913,14 +896,14 @@ export default function App() {
             </div>
 
             <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
-              Collez le lien de partage d'une playlist publique <span className="text-white font-medium">Spotify</span> ou <span className="text-white font-medium">Deezer</span>.
+              Collez le lien de partage d'une playlist publique <span className="text-white font-medium">Spotify</span>, <span className="text-white font-medium">Apple Music</span> ou <span className="text-white font-medium">Deezer</span>.
             </p>
 
             <form onSubmit={handleImportSubmit} className="space-y-3">
               <input
                 type="url"
                 required
-                placeholder="https://open.spotify.com/playlist/... ou https://deezer.com/playlist/..."
+                placeholder="https://open.spotify.com/... ou https://music.apple.com/... ou https://deezer.com/..."
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 className="w-full bg-white/[0.06] px-4 py-2.5 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-white/40 border border-white/[0.04]"
