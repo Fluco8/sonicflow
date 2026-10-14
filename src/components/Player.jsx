@@ -21,6 +21,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
   const [isMuted, setIsMuted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
   // Courbe logarithmique humaine : un slider à 0.5 donne en réalité 0.25 (0.5²),
   // ce qui offre une finesse chirurgicale dans les bas volumes sans agresser les oreilles
@@ -108,7 +109,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
     };
   }, [onNext]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio.src) return;
     if (isPlaying) {
@@ -118,7 +119,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
       audio.play();
       setIsPlaying(true);
     }
-  };
+  }, [isPlaying]);
 
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
@@ -139,7 +140,7 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
     } catch {}
   };
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (isMuted) {
       setIsMuted(false);
       audioRef.current.volume = getPerceivedVolume(sliderVolume);
@@ -147,7 +148,113 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
       setIsMuted(true);
       audioRef.current.volume = 0;
     }
-  };
+  }, [isMuted, sliderVolume]);
+
+  // Raccourcis clavier globaux intelligents (actifs uniquement hors saisie texte)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ne pas déclencher si l'utilisateur est dans un champ de recherche ou modale
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (
+        tag === 'input' || 
+        tag === 'textarea' || 
+        tag === 'select' || 
+        document.activeElement?.isContentEditable
+      ) {
+        return;
+      }
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          togglePlay();
+          break;
+
+        case 'ArrowRight':
+          e.preventDefault();
+          if (audioRef.current) {
+            const nextT = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 5);
+            audioRef.current.currentTime = nextT;
+            setCurrentTime(nextT);
+          }
+          break;
+
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (audioRef.current) {
+            const prevT = Math.max(0, audioRef.current.currentTime - 5);
+            audioRef.current.currentTime = prevT;
+            setCurrentTime(prevT);
+          }
+          break;
+
+        case 'ArrowUp':
+          e.preventDefault();
+          setSliderVolume(prev => {
+            const nextV = Math.min(1, Math.round((prev + 0.05) * 100) / 100);
+            if (isMuted) setIsMuted(false);
+            audioRef.current.volume = getPerceivedVolume(nextV);
+            try { localStorage.setItem('sf_player_volume', nextV.toString()); } catch {}
+            return nextV;
+          });
+          break;
+
+        case 'ArrowDown':
+          e.preventDefault();
+          setSliderVolume(prev => {
+            const nextV = Math.max(0, Math.round((prev - 0.05) * 100) / 100);
+            audioRef.current.volume = getPerceivedVolume(nextV);
+            try { localStorage.setItem('sf_player_volume', nextV.toString()); } catch {}
+            return nextV;
+          });
+          break;
+
+        case 'KeyM':
+          e.preventDefault();
+          toggleMute();
+          break;
+
+        case 'KeyL':
+          e.preventDefault();
+          if (track && onToggleLike) {
+            onToggleLike(track);
+          }
+          break;
+
+        case 'KeyN':
+        case 'KeyJ':
+          e.preventDefault();
+          if (onNext) onNext();
+          break;
+
+        case 'KeyP':
+        case 'KeyK':
+          e.preventDefault();
+          if (onPrevious) onPrevious();
+          break;
+
+        case 'Slash':
+          if (e.shiftKey) { // '?'
+            e.preventDefault();
+            setShowShortcutsModal(prev => !prev);
+          }
+          break;
+
+        case 'Escape':
+          if (showShortcutsModal) {
+            e.preventDefault();
+            setShowShortcutsModal(false);
+          }
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlay, toggleMute, onNext, onPrevious, onToggleLike, track, isMuted, showShortcutsModal]);
 
   if (!track) return null;
 
@@ -283,14 +390,92 @@ export default function Player({ track, onNext, onPrevious, nextTrack, onToggleL
             step="0.005"
             value={isMuted ? 0 : sliderVolume}
             onChange={handleVolumeChange}
-            className="w-24 accent-white cursor-pointer"
+            className="w-20 accent-white cursor-pointer"
             style={{
               background: `linear-gradient(to right, #ffffff ${(isMuted ? 0 : sliderVolume) * 100}%, rgba(255,255,255,0.15) ${(isMuted ? 0 : sliderVolume) * 100}%)`
             }}
-            title={`Volume : ${Math.round((isMuted ? 0 : sliderVolume) * 100)}%`}
+            title={`Volume : ${Math.round((isMuted ? 0 : sliderVolume) * 100)}% (↑ / ↓)`}
           />
+
+          {/* Bouton guide des raccourcis clavier */}
+          <button
+            onClick={() => setShowShortcutsModal(prev => !prev)}
+            className="text-neutral-400 hover:text-white transition-colors apple-press p-1 rounded-md hover:bg-white/10"
+            title="Raccourcis clavier (Shift + ?)"
+          >
+            <span className="text-xs font-mono font-bold leading-none">⌨</span>
+          </button>
         </div>
       </div>
+
+      {/* Modale Raccourcis Clavier In-Page */}
+      {showShortcutsModal && (
+        <div 
+          onClick={() => setShowShortcutsModal(false)}
+          className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 pointer-events-auto"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="apple-glass rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <span>⌨</span>
+                <span>Raccourcis Clavier</span>
+              </h3>
+              <button
+                onClick={() => setShowShortcutsModal(false)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-neutral-300 flex items-center justify-center text-xs apple-press transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Lecture / Pause</span>
+                <kbd className="px-2 py-0.5 rounded bg-white/10 text-white font-mono font-bold">Espace</kbd>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Avancer / Reculer de 5s</span>
+                <div className="flex gap-1 font-mono font-bold text-white">
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">←</kbd>
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">→</kbd>
+                </div>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Volume haut / bas</span>
+                <div className="flex gap-1 font-mono font-bold text-white">
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">↑</kbd>
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">↓</kbd>
+                </div>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Couper / Réactiver le son</span>
+                <kbd className="px-2 py-0.5 rounded bg-white/10 text-white font-mono font-bold">M</kbd>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Ajouter aux favoris</span>
+                <kbd className="px-2 py-0.5 rounded bg-white/10 text-white font-mono font-bold">L</kbd>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/5">
+                <span className="text-neutral-300">Titre suivant</span>
+                <div className="flex gap-1 font-mono font-bold text-white">
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">N</kbd>
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">J</kbd>
+                </div>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-neutral-300">Titre précédent</span>
+                <div className="flex gap-1 font-mono font-bold text-white">
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">P</kbd>
+                  <kbd className="px-2 py-0.5 rounded bg-white/10">K</kbd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="pointer-events-auto text-center text-xs text-red-400 mt-2 bg-neutral-900/90 py-1 px-3 rounded-full border border-red-500/20 shadow">
