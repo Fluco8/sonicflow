@@ -26,6 +26,9 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState(null);
 
+  // Menu contextuel clic droit sur playlist
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, playlistId }
+
   // Largeur dynamique ajustable de la barre latérale
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
@@ -65,6 +68,13 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('sf_sidebar_width', sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  // Fermer le menu contextuel lors d'un clic ailleurs
+  useEffect(() => {
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener('click', closeMenu);
+    return () => window.removeEventListener('click', closeMenu);
+  }, []);
 
   useEffect(() => {
     getDailyMixes().then(mixes => {
@@ -196,6 +206,16 @@ export default function App() {
     setPlaylists(prev => [...prev, newPl]);
   };
 
+  const handleDeletePlaylist = (playlistId) => {
+    if (confirm('Voulez-vous vraiment supprimer cette playlist ?')) {
+      setPlaylists(prev => prev.filter(p => p.id !== playlistId));
+      if (selectedPlaylistId === playlistId) {
+        setActiveTab('home');
+        setSelectedPlaylistId(null);
+      }
+    }
+  };
+
   const handleAddToPlaylist = (playlistId, track) => {
     setPlaylists(prev => prev.map(pl => {
       if (pl.id === playlistId) {
@@ -208,7 +228,16 @@ export default function App() {
     }));
   };
 
-  // Traitement de l'importation de playlist externe (Spotify / Deezer)
+  const handleContextMenu = (e, playlistId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      playlistId
+    });
+  };
+
   const handleImportSubmit = async (e) => {
     e.preventDefault();
     if (!importUrl.trim()) return;
@@ -264,7 +293,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Centre : Bouton Accueil + Barre de Recherche sans cube */}
+        {/* Centre : Bouton Accueil + Barre de Recherche */}
         <div className="flex-1 max-w-xl flex items-center gap-2.5 justify-center">
           <button
             onClick={() => { setActiveTab('home'); setHasSearched(false); }}
@@ -388,6 +417,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Liste des playlists avec clic droit */}
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {playlists.length === 0 ? (
               <p className="text-xs text-neutral-500 px-3 py-6 text-center">Aucune playlist créée.</p>
@@ -395,10 +425,11 @@ export default function App() {
               playlists.map(pl => {
                 const isActive = activeTab === 'playlist' && selectedPlaylistId === pl.id;
                 return (
-                  <button
+                  <div
                     key={pl.id}
+                    onContextMenu={(e) => handleContextMenu(e, pl.id)}
                     onClick={() => { setSelectedPlaylistId(pl.id); setActiveTab('playlist'); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group cursor-pointer ${
                       isActive
                         ? 'bg-white/10 text-white font-semibold'
                         : 'text-neutral-300 hover:text-white hover:bg-white/[0.04]'
@@ -411,7 +442,16 @@ export default function App() {
                       <p className="truncate text-sm font-semibold text-white tracking-tight">{pl.name}</p>
                       <p className="text-xs text-neutral-400 truncate mt-0.5">{pl.tracks?.length || 0} titre(s)</p>
                     </div>
-                  </button>
+
+                    {/* Bouton croix rapide au survol */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeletePlaylist(pl.id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-red-400 text-xs rounded transition-opacity"
+                      title="Supprimer la playlist"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 );
               })
             )}
@@ -506,16 +546,30 @@ export default function App() {
             </div>
           )}
 
+          {/* En-tête Playlist sélectionnée avec BOUTON SUPPRIMER DÉDIÉ */}
           {activeTab === 'playlist' && currentDisplayedPlaylist && (
-            <div className="mb-8 flex items-end gap-5">
-              <div className="w-24 h-24 rounded-xl bg-[#242424] flex items-center justify-center text-white text-4xl shadow-xl border border-white/5">
-                🎵
+            <div className="mb-8 flex items-end justify-between gap-5 border-b border-white/[0.06] pb-6">
+              <div className="flex items-end gap-5">
+                <div className="w-24 h-24 rounded-xl bg-[#242424] flex items-center justify-center text-white text-4xl shadow-xl border border-white/5">
+                  🎵
+                </div>
+                <div>
+                  <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
+                  <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">{currentDisplayedPlaylist.name}</h2>
+                  <p className="text-xs text-neutral-400 mt-1 font-mono">{currentDisplayedPlaylist.tracks.length} titre(s)</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">Playlist</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight mt-0.5">{currentDisplayedPlaylist.name}</h2>
-                <p className="text-xs text-neutral-400 mt-1 font-mono">{currentDisplayedPlaylist.tracks.length} titre(s)</p>
-              </div>
+
+              {/* Bouton Supprimer la playlist */}
+              <button
+                onClick={() => handleDeletePlaylist(currentDisplayedPlaylist.id)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 text-xs font-semibold transition-all apple-press"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Supprimer la playlist</span>
+              </button>
             </div>
           )}
 
@@ -559,7 +613,7 @@ export default function App() {
         onSelectPlaylist={handleAddToPlaylist}
       />
 
-      {/* MODALE D'IMPORTATION DE PLAYLIST SPOTIFY / DEEZER */}
+      {/* MODALE D'IMPORTATION */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="apple-glass rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-150">
@@ -574,7 +628,7 @@ export default function App() {
             </div>
 
             <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
-              Collez le lien de partage d'une playlist publique <span className="text-white font-medium">Spotify</span> ou <span className="text-white font-medium">Deezer</span>. Tous les morceaux seront automatiquement extraits et jouables.
+              Collez le lien de partage d'une playlist publique <span className="text-white font-medium">Spotify</span> ou <span className="text-white font-medium">Deezer</span>.
             </p>
 
             <form onSubmit={handleImportSubmit} className="space-y-3">
@@ -612,6 +666,29 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MENU CONTEXTUEL CLIC DROIT SUR PLAYLIST */}
+      {contextMenu && (
+        <div
+          style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
+          className="fixed z-50 bg-[#282828] border border-white/10 rounded-xl py-1 shadow-2xl min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              handleDeletePlaylist(contextMenu.playlistId);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3.5 py-2 text-xs text-red-400 hover:bg-white/10 hover:text-red-300 flex items-center gap-2 transition-colors font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Supprimer la playlist</span>
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
