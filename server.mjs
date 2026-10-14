@@ -47,13 +47,13 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// 2. Importation de Playlists (Deezer & Spotify URL)
+// 2. Importation de Playlists (Deezer & Spotify URL) avec extraction haute fidélité
 app.post('/api/import-playlist', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL manquante' });
 
   try {
-    // Cas 1 : URL Deezer (ex: https://www.deezer.com/fr/playlist/123456789)
+    // Cas 1 : URL Deezer
     if (url.includes('deezer.com')) {
       const match = url.match(/playlist\/(\d+)/);
       if (!match) return res.status(400).json({ error: 'Lien de playlist Deezer invalide' });
@@ -83,68 +83,45 @@ app.post('/api/import-playlist', async (req, res) => {
       });
     }
 
-    // Cas 2 : URL Spotify (ex: https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M)
+    // Cas 2 : URL Spotify (extraction directe depuis l'embed JSON complet de Spotify)
     if (url.includes('spotify.com')) {
       const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
       if (!match) return res.status(400).json({ error: 'Lien de playlist Spotify invalide' });
       const playlistId = match[1];
 
-      // Extraction des métadonnées de la page publique Spotify sans token d'auth lourd
-      const r = await fetch(`https://open.spotify.com/playlist/${playlistId}`, {
+      // Extraction via le point d'accès embed officiel
+      const embedRes = await fetch(`https://open.spotify.com/embed/playlist/${playlistId}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       });
-      const html = await r.text();
+      const html = await embedRes.text();
+      const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/);
 
-      // Titre de la playlist Spotify
-      const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
-      const playlistName = titleMatch ? titleMatch[1] : 'Playlist Spotify Importée';
-
-      // Scrape les morceaux répertoriés dans la page publique
-      const trackMatches = [...html.matchAll(/class="[^"]*track-name[^"]*">([^<]+)<\/span>/g)];
-      
-      // Fallback API Deezer pour résoudre les titres trouvés
-      let importedTracks = [];
-      const trackTitles = trackMatches.map(m => m[1]).slice(0, 30);
-
-      if (trackTitles.length > 0) {
-        importedTracks = await Promise.all(
-          trackTitles.map(async (tName) => {
-            const sr = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(tName)}&limit=1`);
-            const sData = await sr.json();
-            const top = sData.data?.[0];
-            if (!top) return null;
-            return {
-              id: top.id.toString(),
-              title: top.title,
-              artist: top.artist?.name || 'Inconnu',
-              duration: top.duration || 0,
-              thumbnail: top.album?.cover_medium || top.album?.cover || '',
-              searchKey: `${top.title} ${top.artist?.name || ''} audio`,
-              trackId: top.id,
-              artistId: top.artist?.id
-            };
-          })
-        );
-      } else {
-        // Fallback d'enrichissement automatique via l'API Deezer avec le nom de la playlist
-        const fallbackSearch = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(playlistName)}&limit=20`);
-        const fallbackData = await fallbackSearch.json();
-        importedTracks = (fallbackData.data || []).map(t => ({
-          id: t.id.toString(),
-          title: t.title,
-          artist: t.artist?.name || 'Inconnu',
-          duration: t.duration || 0,
-          thumbnail: t.album?.cover_medium || t.album?.cover || '',
-          searchKey: `${t.title} ${t.artist?.name || ''} audio`,
-          trackId: t.id,
-          artistId: t.artist?.id
-        }));
+      if (!nextMatch) {
+        return res.status(500).json({ error: 'Impossible de lire les données Spotify' });
       }
 
-      const validTracks = importedTracks.filter(Boolean);
+      const spotifyData = JSON.parse(nextMatch[1]);
+      const entity = spotifyData.props?.pageProps?.state?.data?.entity;
+      const playlistName = entity?.name || 'Playlist Spotify Importée';
+      const rawTrackList = entity?.trackList || [];
+
+      // Mappage instantané de chaque titre exact
+      const tracks = rawTrackList.map((t, idx) => {
+        const cleanArtist = (t.subtitle || '').replace(/\u00a0/g, ' ').split(',')[0].trim();
+        const cleanTitle = (t.title || '').trim();
+        return {
+          id: `sp_${playlistId}_${idx}`,
+          title: cleanTitle,
+          artist: cleanArtist || t.subtitle || 'Artiste inconnu',
+          duration: Math.round((t.duration || 180000) / 1000),
+          thumbnail: t.album?.coverGroup?.views?.[0]?.url || 'https://e-cdns-images.dzcdn.net/images/cover/d41d8cd98f00b204e9800998ecf8427e/250x250-000000-80-0-0.jpg',
+          searchKey: `${cleanTitle} ${cleanArtist} audio`
+        };
+      });
+
       return res.json({
         name: playlistName,
-        tracks: validTracks
+        tracks
       });
     }
 
