@@ -79,11 +79,12 @@ app.post('/api/import-playlist', async (req, res) => {
 
       return res.json({
         name: data.title || 'Playlist Deezer Importée',
+        cover: data.picture_xl || data.picture_medium || data.picture || (tracks[0]?.thumbnail) || '',
         tracks
       });
     }
 
-    // Cas 2 : URL Spotify (extraction directe depuis l'embed JSON complet de Spotify)
+    // Cas 2 : URL Spotify (extraction directe depuis l'embed JSON complet de Spotify + covers oEmbed HD)
     if (url.includes('spotify.com')) {
       const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
       if (!match) return res.status(400).json({ error: 'Lien de playlist Spotify invalide' });
@@ -103,24 +104,48 @@ app.post('/api/import-playlist', async (req, res) => {
       const spotifyData = JSON.parse(nextMatch[1]);
       const entity = spotifyData.props?.pageProps?.state?.data?.entity;
       const playlistName = entity?.name || 'Playlist Spotify Importée';
+      const playlistCover = entity?.coverArt?.sources?.[0]?.url || entity?.visualIdentity?.image?.[0]?.url || '';
       const rawTrackList = entity?.trackList || [];
 
-      // Mappage instantané de chaque titre exact
+      // Récupération concurrente des vraies pochettes d'albums Spotify en paquets
+      const chunkSize = 15;
+      const coversMap = {};
+      for (let i = 0; i < rawTrackList.length; i += chunkSize) {
+        const chunk = rawTrackList.slice(i, i + chunkSize);
+        await Promise.all(chunk.map(async t => {
+          const trackId = (t.uri || '').replace('spotify:track:', '');
+          if (!trackId) return;
+          try {
+            const oRes = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`);
+            if (oRes.ok) {
+              const oData = await oRes.json();
+              if (oData?.thumbnail_url) {
+                coversMap[t.uri] = oData.thumbnail_url;
+              }
+            }
+          } catch {}
+        }));
+      }
+
+      // Mappage de chaque titre avec sa vraie pochette HD
       const tracks = rawTrackList.map((t, idx) => {
         const cleanArtist = (t.subtitle || '').replace(/\u00a0/g, ' ').split(',')[0].trim();
         const cleanTitle = (t.title || '').trim();
+        const realCover = coversMap[t.uri] || playlistCover || 'https://cdn-images.dzcdn.net/images/cover/d41d8cd98f00b204e9800998ecf8427e/250x250-000000-80-0-0.jpg';
+
         return {
           id: `sp_${playlistId}_${idx}`,
           title: cleanTitle,
           artist: cleanArtist || t.subtitle || 'Artiste inconnu',
           duration: Math.round((t.duration || 180000) / 1000),
-          thumbnail: t.album?.coverGroup?.views?.[0]?.url || 'https://e-cdns-images.dzcdn.net/images/cover/d41d8cd98f00b204e9800998ecf8427e/250x250-000000-80-0-0.jpg',
+          thumbnail: realCover,
           searchKey: `${cleanTitle} ${cleanArtist} audio`
         };
       });
 
       return res.json({
         name: playlistName,
+        cover: playlistCover || tracks[0]?.thumbnail || '',
         tracks
       });
     }
