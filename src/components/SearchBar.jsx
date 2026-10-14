@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+
 export default function SearchBar({ onSearch }) {
   const [query, setQuery] = useState('');
   const debounceRef = useRef(null);
@@ -21,23 +22,21 @@ export default function SearchBar({ onSearch }) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
-      <div className="relative flex items-center w-full">
-        {/* Loupe bien espacée à gauche */}
-        <div className="absolute left-4 pointer-events-none text-neutral-400 flex items-center justify-center">
+      <div className="flex items-center w-full bg-[#1f1f1f] hover:bg-[#282828] focus-within:bg-[#282828] focus-within:ring-2 focus-within:ring-white/80 rounded-full px-4 py-2.5 transition-all shadow-inner border border-white/[0.04]">
+        {/* Loupe intégrée en flex (aucun chevauchement absolu) */}
+        <div className="shrink-0 text-neutral-400 mr-3 flex items-center justify-center">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
 
-        {/* Input pilule épuré avec padding gauche généreux (pl-12) pour éviter TOUT chevauchement */}
+        {/* Input textuel */}
         <input
           type="text"
           value={query}
           onChange={handleChange}
           placeholder="Que souhaitez-vous écouter ?"
-          className="w-full pl-12 pr-10 py-3 bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white rounded-full 
-                     placeholder:text-neutral-400 placeholder:font-normal focus:outline-none focus:ring-1 focus:ring-white/40 
-                     transition-all text-[13px] tracking-normal shadow-inner leading-normal"
+          className="flex-1 bg-transparent text-white placeholder-neutral-400 text-[13px] focus:outline-none tracking-normal font-normal leading-none"
         />
 
         {/* Bouton croix pour effacer */}
@@ -45,7 +44,7 @@ export default function SearchBar({ onSearch }) {
           <button
             type="button"
             onClick={() => { setQuery(''); onSearch(''); }}
-            className="absolute right-3.5 w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 text-white flex items-center justify-center text-[10px] apple-press"
+            className="shrink-0 ml-2 w-4 h-4 rounded-full bg-neutral-600 hover:bg-neutral-500 text-white flex items-center justify-center text-[10px] apple-press transition-colors"
           >
             ✕
           </button>
